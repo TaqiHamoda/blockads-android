@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">인증서가 저장됨. 파일 관리자에서 설치하세요.</string>
     <string name="https_filtering_started">HTTPS 필터링 시작됨</string>
     <string name="https_filtering_stopped">HTTPS 필터링 중지됨</string>
+    <string name="root_proxy_start_failed_title">BlockAds를 시작하지 못했습니다</string>
+    <string name="root_proxy_start_failed_text">보호를 시작하기 위한 루트 권한을 얻지 못했습니다. 다시 시도하려면 사용을 누르세요.</string>
 </resources>

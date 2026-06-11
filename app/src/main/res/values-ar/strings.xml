@@ -523,4 +523,6 @@
     <string name="https_filtering_cert_saved_legacy">تم حفظ الشهادة. ثبتها من مدير الملفات.</string>
     <string name="https_filtering_started">بدأت تصفية HTTPS</string>
     <string name="https_filtering_stopped">توقفت تصفية HTTPS</string>
+    <string name="root_proxy_start_failed_title">فشل بدء تشغيل BlockAds</string>
+    <string name="root_proxy_start_failed_text">تعذر الحصول على صلاحية الروت لبدء الحماية. انقر على تفعيل لإعادة المحاولة.</string>
 </resources>

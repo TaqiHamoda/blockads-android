@@ -528,4 +528,6 @@ Desteklenen formatlar:
     <string name="https_filtering_cert_saved_legacy">Sertifika kaydedildi. Dosya yöneticisinden yükleyin.</string>
     <string name="https_filtering_started">HTTPS filtreleme başlatıldı</string>
     <string name="https_filtering_stopped">HTTPS filtreleme durduruldu</string>
+    <string name="root_proxy_start_failed_title">BlockAds başlatılamadı</string>
+    <string name="root_proxy_start_failed_text">Korumayı başlatmak için root erişimi alınamadı. Yeniden denemek için Etkinleştir\'e dokunun.</string>
 </resources>

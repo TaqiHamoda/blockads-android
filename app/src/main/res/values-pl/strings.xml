@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Certyfikat zapisany. Zainstaluj z menedżera plików.</string>
     <string name="https_filtering_started">Filtrowanie HTTPS uruchomione</string>
     <string name="https_filtering_stopped">Filtrowanie HTTPS zatrzymane</string>
+    <string name="root_proxy_start_failed_title">Nie udało się uruchomić BlockAds</string>
+    <string name="root_proxy_start_failed_text">Nie udało się uzyskać dostępu root, aby uruchomić ochronę. Stuknij Włącz, aby spróbować ponownie.</string>
 </resources>

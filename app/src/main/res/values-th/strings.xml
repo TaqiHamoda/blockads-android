@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">บันทึกใบรับรองแล้ว ติดตั้งจากตัวจัดการไฟล์</string>
     <string name="https_filtering_started">เริ่มการกรอง HTTPS แล้ว</string>
     <string name="https_filtering_stopped">หยุดการกรอง HTTPS แล้ว</string>
+    <string name="root_proxy_start_failed_title">BlockAds เริ่มทำงานไม่สำเร็จ</string>
+    <string name="root_proxy_start_failed_text">ไม่สามารถรับสิทธิ์รูทเพื่อเริ่มการป้องกันได้ แตะ เปิดใช้งาน เพื่อลองอีกครั้ง</string>
 </resources>

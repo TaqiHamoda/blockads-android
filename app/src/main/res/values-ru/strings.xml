@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Сертификат сохранён. Установите его через файловый менеджер.</string>
     <string name="https_filtering_started">HTTPS-фильтрация запущена</string>
     <string name="https_filtering_stopped">HTTPS-фильтрация остановлена</string>
+    <string name="root_proxy_start_failed_title">Не удалось запустить BlockAds</string>
+    <string name="root_proxy_start_failed_text">Не удалось получить root-доступ для запуска защиты. Нажмите «Включить», чтобы повторить попытку.</string>
 </resources>

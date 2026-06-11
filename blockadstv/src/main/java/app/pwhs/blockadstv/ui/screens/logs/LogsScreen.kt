@@ -125,7 +125,7 @@ fun LogsScreen(
             if (totalCount > 0) {
                 val rate = blockedCount * 100f / totalCount
                 Text(
-                    text = String.format(Locale.getDefault(), "%.1f%% blocked", rate),
+                    text = String.format(androidx.compose.ui.text.intl.Locale.current.platformLocale, "%.1f%% blocked", rate),
                     style = MaterialTheme.typography.labelLarge,
                     color = TextSecondary,
                 )

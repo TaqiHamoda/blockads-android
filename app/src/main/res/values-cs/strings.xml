@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Certifikát uložen. Nainstalujte ze správce souborů.</string>
     <string name="https_filtering_started">HTTPS filtrování spuštěno</string>
     <string name="https_filtering_stopped">HTTPS filtrování zastaveno</string>
+    <string name="root_proxy_start_failed_title">BlockAds se nepodařilo spustit</string>
+    <string name="root_proxy_start_failed_text">Nepodařilo se získat root oprávnění ke spuštění ochrany. Klepnutím na Povolit to zkuste znovu.</string>
 </resources>

@@ -199,7 +199,7 @@ fun HomeScreen(
             StatCard(
                 icon = Icons.Default.Shield,
                 label = "Block Rate",
-                value = String.format(Locale.getDefault(), "%.1f%%", blockRate),
+                value = String.format(androidx.compose.ui.text.intl.Locale.current.platformLocale, "%.1f%%", blockRate),
                 modifier = Modifier.weight(1f),
             )
             StatCard(

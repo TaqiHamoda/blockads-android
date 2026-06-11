@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Đã lưu chứng chỉ. Hãy cài đặt từ trình quản lý tệp.</string>
     <string name="https_filtering_started">Đã bật lọc HTTPS</string>
     <string name="https_filtering_stopped">Đã tắt lọc HTTPS</string>
+    <string name="root_proxy_start_failed_title">BlockAds không thể khởi động</string>
+    <string name="root_proxy_start_failed_text">Không thể lấy quyền root để bật bảo vệ. Nhấn Bật để thử lại.</string>
 </resources>

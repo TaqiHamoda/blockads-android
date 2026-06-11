@@ -220,7 +220,7 @@ fun StatisticsScreen(
                             color = TextSecondary
                         )
                         Text(
-                            text = "${String.format(Locale.getDefault(), "%.1f", blockRate)}%",
+                            text = "${String.format(androidx.compose.ui.text.intl.Locale.current.platformLocale, "%.1f", blockRate)}%",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onBackground

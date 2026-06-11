@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Certificato salvato. Installalo dal gestore file.</string>
     <string name="https_filtering_started">Filtro HTTPS avviato</string>
     <string name="https_filtering_stopped">Filtro HTTPS fermato</string>
+    <string name="root_proxy_start_failed_title">Avvio di BlockAds non riuscito</string>
+    <string name="root_proxy_start_failed_text">Impossibile ottenere l\'accesso root per avviare la protezione. Tocca Attiva per riprovare.</string>
 </resources>

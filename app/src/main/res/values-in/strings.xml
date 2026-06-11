@@ -507,4 +507,6 @@
     <string name="https_filtering_cert_saved_legacy">Sertifikat disimpan. Instal dari pengelola file.</string>
     <string name="https_filtering_started">Pemfilteran HTTPS dimulai</string>
     <string name="https_filtering_stopped">Pemfilteran HTTPS dihentikan</string>
+    <string name="root_proxy_start_failed_title">BlockAds gagal dimulai</string>
+    <string name="root_proxy_start_failed_text">Tidak bisa mendapatkan akses root untuk memulai perlindungan. Ketuk Aktifkan untuk mencoba lagi.</string>
 </resources>
