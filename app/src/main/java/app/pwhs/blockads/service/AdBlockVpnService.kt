@@ -621,44 +621,23 @@ class AdBlockVpnService : VpnService() {
                 val b = Builder()
                     .setSession("BlockAds")
                     .addAddress("10.0.0.2", 32)
+                    .addRoute("10.0.0.1", 32)
                     .addDnsServer("10.0.0.1")
                     .addAddress("fd00::2", 128)
+                    .addRoute("fd00::1", 128)
                     .addDnsServer("fd00::1")
                     .setBlocking(true)
                     .setMtu(1500)
 
-                // Full default route so ALL DNS is captured by the engine,
-                // not just the fake DNS IPs. Previously only 10.0.0.1/32 and
-                // fd00::1/128 were routed, which let the system's Private DNS
-                // (DoT, TCP 853) and any app hard-coding a resolver reach the
-                // network DNS outside the tunnel — the ISP-DNS leak in #145.
-                // The userspace engine already handles full capture (same as
-                // WireGuard mode); the fake DNS above forces plain DNS the
-                // engine answers, and non-DNS flows pass through via the
-                // engine's DirectOutbound on protect()ed sockets.
-                b.addRoute("0.0.0.0", 0)
-                b.addRoute("::", 0)
-
-                // Explicit /32 + /128 routes to the fake DNS keep it inside
-                // the tunnel via longest-prefix match even when the LAN
-                // ranges below are excluded.
-                b.addRoute("10.0.0.1", 32)
-                b.addRoute("fd00::1", 128)
-
-                // Exclude LAN/private ranges so local servers remain reachable
-                // (also issue #104). Mirrors the WireGuard branch.
-                val excludeLan = runBlocking { appPrefs.excludeLan.first() }
-                if (excludeLan && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        b.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("10.0.0.0"), 8))
-                        b.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("172.16.0.0"), 12))
-                        b.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("192.168.0.0"), 16))
-                        b.excludeRoute(android.net.IpPrefix(java.net.InetAddress.getByName("169.254.0.0"), 16))
-                        Timber.d("LAN excluded from DNS-only VPN routes")
-                    } catch (e: Exception) {
-                        Timber.w(e, "Failed to exclude LAN routes")
-                    }
-                }
+                // DNS-only routing: only the fake DNS IPs are captured. A
+                // full 0.0.0.0/0 route was tried for the #145 DNS-leak fix
+                // but the engine drops non-DNS packets in this mode (it only
+                // forwards when the userspace TCP stack is active for HTTPS
+                // filtering), so full-route blackholed all traffic = no
+                // internet. Reverted to DNS-only. The Private DNS (DoT)
+                // leak is instead surfaced to the user via a warning
+                // (see NetworkMonitor.isPrivateDnsActive); a proper capture
+                // needs engine-level DoT handling (tracked in #145).
 
                 if (httpsFilteringEnabled) {
                     // Route the synthetic IP range used for the local
@@ -695,9 +674,12 @@ class AdBlockVpnService : VpnService() {
                 }
             }
 
-            // Note: allowBypass() is intentionally NOT set. It lets apps open
-            // sockets that skip the VPN, which in DNS-only full-route mode
-            // would re-open the DNS leak path this fix closes (#145).
+            // DNS-only mode allows apps to bypass the tunnel for non-DNS
+            // sockets (we only route the fake DNS IPs anyway). WireGuard
+            // mode is full-tunnel, so no bypass there.
+            if (wgConfig == null) {
+                builder.allowBypass()
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 builder.setUnderlyingNetworks(null)
