@@ -245,7 +245,7 @@ fun HomeScreen(
                         if (vpnEnabled) {
                             viewModel.stopVpn(context)
                         } else {
-                            if (VpnUtils.isOtherVpnActive(context)) {
+                            if (!isRootMode && VpnUtils.isOtherVpnActive(context)) {
                                 onShowVpnConflictDialog()
                             } else {
                                 onRequestVpnPermission()
