@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">Pemfilteran HTTPS dihentikan</string>
     <string name="root_proxy_start_failed_title">BlockAds gagal dimulai</string>
     <string name="root_proxy_start_failed_text">Tidak bisa mendapatkan akses root untuk memulai perlindungan. Ketuk Aktifkan untuk mencoba lagi.</string>
+    <string name="private_dns_warning_title">DNS Pribadi aktif</string>
+    <string name="private_dns_warning_text">DNS Pribadi Android melewati BlockAds, sehingga pemfilteran mungkin tidak diterapkan. Setel DNS Pribadi ke Nonaktif atau Otomatis di setelan sistem.</string>
 </resources>

@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">HTTPS filtrování zastaveno</string>
     <string name="root_proxy_start_failed_title">BlockAds se nepodařilo spustit</string>
     <string name="root_proxy_start_failed_text">Nepodařilo se získat root oprávnění ke spuštění ochrany. Klepnutím na Povolit to zkuste znovu.</string>
+    <string name="private_dns_warning_title">Soukromé DNS je zapnuté</string>
+    <string name="private_dns_warning_text">Soukromé DNS systému Android obchází BlockAds, takže filtrování nemusí fungovat. Nastavte soukromé DNS na Vypnuto nebo Automaticky v nastavení systému.</string>
 </resources>

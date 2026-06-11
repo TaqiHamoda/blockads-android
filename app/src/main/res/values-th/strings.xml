@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">หยุดการกรอง HTTPS แล้ว</string>
     <string name="root_proxy_start_failed_title">BlockAds เริ่มทำงานไม่สำเร็จ</string>
     <string name="root_proxy_start_failed_text">ไม่สามารถรับสิทธิ์รูทเพื่อเริ่มการป้องกันได้ แตะ เปิดใช้งาน เพื่อลองอีกครั้ง</string>
+    <string name="private_dns_warning_title">เปิด DNS ส่วนตัวอยู่</string>
+    <string name="private_dns_warning_text">DNS ส่วนตัวของ Android จะข้าม BlockAds การกรองจึงอาจไม่ทำงาน โปรดตั้งค่า DNS ส่วนตัวเป็นปิดหรืออัตโนมัติในการตั้งค่าระบบ</string>
 </resources>

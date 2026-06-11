@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">Đã tắt lọc HTTPS</string>
     <string name="root_proxy_start_failed_title">BlockAds không thể khởi động</string>
     <string name="root_proxy_start_failed_text">Không thể lấy quyền root để bật bảo vệ. Nhấn Bật để thử lại.</string>
+    <string name="private_dns_warning_title">DNS riêng tư đang bật</string>
+    <string name="private_dns_warning_text">DNS riêng tư của Android bỏ qua BlockAds nên việc lọc có thể không áp dụng. Hãy đặt DNS riêng tư về Tắt hoặc Tự động trong cài đặt hệ thống.</string>
 </resources>
