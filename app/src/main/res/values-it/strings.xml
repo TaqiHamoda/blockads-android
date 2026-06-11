@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">Filtro HTTPS fermato</string>
     <string name="root_proxy_start_failed_title">Avvio di BlockAds non riuscito</string>
     <string name="root_proxy_start_failed_text">Impossibile ottenere l\'accesso root per avviare la protezione. Tocca Attiva per riprovare.</string>
+    <string name="private_dns_warning_title">DNS privato attivo</string>
+    <string name="private_dns_warning_text">Il DNS privato di Android aggira BlockAds, quindi il filtraggio potrebbe non essere applicato. Imposta il DNS privato su Disattivato o Automatico nelle impostazioni di sistema.</string>
 </resources>

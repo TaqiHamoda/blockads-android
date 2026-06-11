@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">סינון HTTPS הופסק</string>
     <string name="root_proxy_start_failed_title">ההפעלה של BlockAds נכשלה</string>
     <string name="root_proxy_start_failed_text">לא ניתן לקבל גישת root כדי להפעיל את ההגנה. הקש על הפעלה כדי לנסות שוב.</string>
+    <string name="private_dns_warning_title">‏DNS פרטי פעיל</string>
+    <string name="private_dns_warning_text">‏DNS פרטי של Android עוקף את BlockAds, ולכן הסינון עלול לא לחול. הגדירו את ה-DNS הפרטי לכבוי או אוטומטי בהגדרות המערכת.</string>
 </resources>

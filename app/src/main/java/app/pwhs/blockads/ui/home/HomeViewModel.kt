@@ -108,6 +108,18 @@ class HomeViewModel(
     val domainCount: StateFlow<Int> = filterRepo.domainCountFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), filterRepo.domainCount)
 
+    // Warn when protection is on in VPN mode but Android Private DNS (Strict
+    // DoT) is active — it bypasses BlockAds' DNS interception, so filtering
+    // silently doesn't apply. Root Proxy mode disables Private DNS itself, so
+    // the warning is VPN-mode only (#145).
+    val privateDnsWarning: StateFlow<Boolean> = combine(
+        vpnEnabled,
+        routingMode,
+        AdBlockVpnService.privateDnsStrict
+    ) { enabled, mode, strict ->
+        enabled && mode != AppPreferences.ROUTING_MODE_ROOT && strict
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         // Uptime ticker — only ticks while VPN or Root Proxy is RUNNING
         viewModelScope.launch {

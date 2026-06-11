@@ -125,6 +125,23 @@ class AdBlockVpnService : VpnService() {
         var lastStoppedTimestamp = 0L
             private set
 
+        /** True when Android Private DNS is in Strict ("hostname") mode on the
+         *  active network. In that mode the system resolver does mandatory DoT
+         *  to a fixed server, bypassing BlockAds' DNS interception entirely —
+         *  so filtering silently doesn't apply. The UI surfaces a warning
+         *  (no-root VPN mode cannot disable Private DNS; see #145). */
+        private val _privateDnsStrict = MutableStateFlow(false)
+        val privateDnsStrict: StateFlow<Boolean> = _privateDnsStrict.asStateFlow()
+
+        /** Update [privateDnsStrict] from the active network's LinkProperties. */
+        fun updatePrivateDnsState(linkProperties: android.net.LinkProperties?) {
+            _privateDnsStrict.value = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                linkProperties?.privateDnsServerName != null
+            } else {
+                false
+            }
+        }
+
         /**
          * Request a VPN restart to apply new settings.
          * Only restarts if the VPN is currently running.
@@ -224,6 +241,8 @@ class AdBlockVpnService : VpnService() {
             onNetworkAvailable = { onNetworkAvailable() },
             onNetworkLost = { onNetworkLost() },
             onLinkPropertiesChanged = { linkProperties ->
+                // Surface Private DNS (Strict/DoT) which bypasses filtering (#145)
+                updatePrivateDnsState(linkProperties)
                 serviceScope.launch {
                     val providerId = appPrefs.dnsProviderId.first()
                     if (providerId == "system") {
@@ -423,6 +442,11 @@ class AdBlockVpnService : VpnService() {
                 isReconnecting = false
                 _state.value = VpnState.RUNNING
                 appPrefs.setVpnEnabled(true)
+                // Initial Private DNS check (callback only fires on change)
+                runCatching {
+                    val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                    updatePrivateDnsState(cm.activeNetwork?.let { cm.getLinkProperties(it) })
+                }
                 if (!resumedFromReconnect) {
                     vpnStartTime = System.currentTimeMillis()
                 }
@@ -856,6 +880,7 @@ class AdBlockVpnService : VpnService() {
             withContext(Dispatchers.Main) {
                 _state.value = VpnState.STOPPED
                 lastStoppedTimestamp = System.currentTimeMillis()
+                _privateDnsStrict.value = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 if (showStoppedNotification) {
                     stopForeground(STOP_FOREGROUND_DETACH)

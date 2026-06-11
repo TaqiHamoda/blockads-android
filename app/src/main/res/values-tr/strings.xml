@@ -530,4 +530,6 @@ Desteklenen formatlar:
     <string name="https_filtering_stopped">HTTPS filtreleme durduruldu</string>
     <string name="root_proxy_start_failed_title">BlockAds başlatılamadı</string>
     <string name="root_proxy_start_failed_text">Korumayı başlatmak için root erişimi alınamadı. Yeniden denemek için Etkinleştir\'e dokunun.</string>
+    <string name="private_dns_warning_title">Özel DNS açık</string>
+    <string name="private_dns_warning_text">Android Özel DNS, BlockAds\'i atlar; bu nedenle filtreleme uygulanmayabilir. Sistem ayarlarından Özel DNS\'i Kapalı veya Otomatik yapın.</string>
 </resources>

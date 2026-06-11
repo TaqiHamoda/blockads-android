@@ -509,4 +509,6 @@
     <string name="https_filtering_stopped">HTTPS-Filterung gestoppt</string>
     <string name="root_proxy_start_failed_title">BlockAds konnte nicht gestartet werden</string>
     <string name="root_proxy_start_failed_text">Root-Zugriff zum Starten des Schutzes konnte nicht erlangt werden. Tippe auf Aktivieren, um es erneut zu versuchen.</string>
+    <string name="private_dns_warning_title">Privates DNS ist aktiv</string>
+    <string name="private_dns_warning_text">Android Privates DNS umgeht BlockAds, daher greift die Filterung evtl. nicht. Stelle Privates DNS in den Systemeinstellungen auf Aus oder Automatisch.</string>
 </resources>

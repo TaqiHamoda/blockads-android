@@ -525,4 +525,6 @@
     <string name="https_filtering_stopped">توقفت تصفية HTTPS</string>
     <string name="root_proxy_start_failed_title">فشل بدء تشغيل BlockAds</string>
     <string name="root_proxy_start_failed_text">تعذر الحصول على صلاحية الروت لبدء الحماية. انقر على تفعيل لإعادة المحاولة.</string>
+    <string name="private_dns_warning_title">‏DNS الخاص مُفعّل</string>
+    <string name="private_dns_warning_text">‏يتجاوز DNS الخاص في Android تطبيق BlockAds، لذا قد لا تُطبَّق التصفية. اضبط DNS الخاص على إيقاف أو تلقائي من إعدادات النظام.</string>
 </resources>
