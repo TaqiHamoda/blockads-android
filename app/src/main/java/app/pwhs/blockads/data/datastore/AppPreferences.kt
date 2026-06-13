@@ -69,6 +69,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_TRUSTED_SSIDS = stringSetPreferencesKey("trusted_ssids")
         private val KEY_PAUSE_ON_TRUSTED = booleanPreferencesKey("pause_on_trusted")
         private val KEY_PAUSED_BY_TRUSTED = booleanPreferencesKey("paused_by_trusted")
+        private val KEY_PAUSED_TRUSTED_SSID = stringPreferencesKey("paused_trusted_ssid")
 
         const val ROUTING_MODE_DIRECT = "direct"
         const val ROUTING_MODE_WIREGUARD = "wireguard"
@@ -355,8 +356,22 @@ class AppPreferences(private val context: Context) {
 
     // Internal flag: true when WE auto-paused due to a trusted network, so
     // we only auto-resume what we paused (not a user-initiated stop).
-    suspend fun setPausedByTrusted(value: Boolean) {
-        context.dataStore.edit { it[KEY_PAUSED_BY_TRUSTED] = value }
+    // Observed by the Home UI to show a distinct "paused on trusted network"
+    // state instead of plain "Unprotected".
+    val pausedByTrusted: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PAUSED_BY_TRUSTED] ?: false
+    }
+
+    /** SSID we auto-paused on, for display. Empty when not paused. */
+    val pausedTrustedSsid: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_PAUSED_TRUSTED_SSID] ?: ""
+    }
+
+    suspend fun setPausedByTrusted(value: Boolean, ssid: String = "") {
+        context.dataStore.edit {
+            it[KEY_PAUSED_BY_TRUSTED] = value
+            it[KEY_PAUSED_TRUSTED_SSID] = if (value) ssid else ""
+        }
     }
 
     suspend fun getPausedByTrustedSnapshot(): Boolean =

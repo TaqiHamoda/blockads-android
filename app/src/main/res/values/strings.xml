@@ -19,6 +19,7 @@
     <string name="vpn_stopped_action_enable">Enable</string>
     <string name="status_protected">Protected</string>
     <string name="status_connecting">Connecting</string>
+    <string name="status_paused">Paused</string>
     <string name="status_unprotected">Unprotected</string>
     <string name="total_queries">Total Queries</string>
     <string name="blocked_queries">Blocked</string>
@@ -171,6 +172,9 @@
     <string name="trusted_networks_no_wifi">Not connected to Wi-Fi (or location permission needed)</string>
     <string name="trusted_networks_list_header">Trusted Wi-Fi networks</string>
     <string name="trusted_networks_empty">No trusted networks yet. Add the one you\'re on to pause BlockAds there.</string>
+    <string name="trusted_networks_paused_title">Paused on trusted network</string>
+    <string name="trusted_networks_paused_text">BlockAds is paused on \"%1$s\" — it resumes automatically when you leave this network.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds is paused on a trusted Wi-Fi network — it resumes automatically when you leave.</string>
     <string name="settings_whitelist_domains">Whitelisted Domains</string>
     <string name="settings_export">Export</string>
     <string name="settings_import">Import</string>

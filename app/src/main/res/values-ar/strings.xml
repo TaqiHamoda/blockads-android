@@ -535,4 +535,8 @@
     <string name="trusted_networks_no_wifi">غير متصل بشبكة Wi-Fi (أو يلزم إذن الموقع)</string>
     <string name="trusted_networks_list_header">شبكات Wi-Fi الموثوقة</string>
     <string name="trusted_networks_empty">لا توجد شبكات موثوقة بعد. أضِف الشبكة الحالية لإيقاف BlockAds عليها.</string>
+    <string name="trusted_networks_paused_title">متوقف مؤقتًا على شبكة موثوقة</string>
+    <string name="trusted_networks_paused_text">تم إيقاف BlockAds مؤقتًا على "%1$s" — يستأنف تلقائيًا عند مغادرتك للشبكة.</string>
+    <string name="trusted_networks_paused_text_generic">تم إيقاف BlockAds مؤقتًا على شبكة Wi-Fi موثوقة — يستأنف عند المغادرة.</string>
+    <string name="status_paused">متوقف مؤقتًا</string>
 </resources>

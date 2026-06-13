@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -112,6 +113,10 @@ fun HomeScreen(
     val securityFilterIds by viewModel.securityFilterIds.collectAsStateWithLifecycle()
     val routingMode by viewModel.routingMode.collectAsStateWithLifecycle()
     val privateDnsWarning by viewModel.privateDnsWarning.collectAsStateWithLifecycle()
+    val pausedByTrusted by viewModel.pausedByTrusted.collectAsStateWithLifecycle()
+    val pausedTrustedSsid by viewModel.pausedTrustedSsid.collectAsStateWithLifecycle()
+    // Show the trusted-network paused state only while actually off.
+    val showTrustedPause = pausedByTrusted && !vpnEnabled && !vpnConnecting && !vpnStopping
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -177,12 +182,52 @@ fun HomeScreen(
                 }
             }
 
+            // Trusted-network paused banner (#197) — distinguishes auto-pause
+            // from a plain "Unprotected" state so the user knows why it's off.
+            if (showTrustedPause) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Wifi,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = stringResource(R.string.trusted_networks_paused_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = if (pausedTrustedSsid.isNotEmpty())
+                                    stringResource(R.string.trusted_networks_paused_text, pausedTrustedSsid)
+                                else stringResource(R.string.trusted_networks_paused_text_generic),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+
             // Status text
             Text(
                 text = when {
                     vpnStopping -> stringResource(R.string.status_disconnecting)
                     vpnConnecting -> stringResource(R.string.status_connecting)
                     vpnEnabled -> stringResource(R.string.status_protected)
+                    showTrustedPause -> stringResource(R.string.status_paused)
                     else -> stringResource(R.string.status_unprotected)
                 },
                 style = MaterialTheme.typography.headlineMedium,
@@ -190,6 +235,7 @@ fun HomeScreen(
                     vpnStopping -> SecurityOrange
                     vpnConnecting -> AccentBlue
                     vpnEnabled -> MaterialTheme.colorScheme.primary
+                    showTrustedPause -> SecurityOrange
                     else -> DangerRed
                 },
                 fontWeight = FontWeight.Bold
@@ -203,6 +249,9 @@ fun HomeScreen(
                     vpnStopping -> stringResource(if (isRootMode) R.string.home_disconnecting_desc_root else R.string.home_disconnecting_desc)
                     vpnConnecting -> stringResource(if (isRootMode) R.string.home_connecting_desc_root else R.string.home_connecting_desc)
                     vpnEnabled -> stringResource(R.string.home_protected_desc)
+                    showTrustedPause -> if (pausedTrustedSsid.isNotEmpty())
+                        stringResource(R.string.trusted_networks_paused_text, pausedTrustedSsid)
+                    else stringResource(R.string.trusted_networks_paused_text_generic)
                     else -> stringResource(R.string.home_unprotected_desc)
                 },
                 style = MaterialTheme.typography.bodyMedium,

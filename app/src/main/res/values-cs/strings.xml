@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Nepřipojeno k Wi-Fi (nebo je třeba oprávnění k poloze)</string>
     <string name="trusted_networks_list_header">Důvěryhodné Wi-Fi sítě</string>
     <string name="trusted_networks_empty">Zatím žádné důvěryhodné sítě. Přidejte aktuální a BlockAds se v ní pozastaví.</string>
+    <string name="trusted_networks_paused_title">Pozastaveno v důvěryhodné síti</string>
+    <string name="trusted_networks_paused_text">BlockAds je pozastaven v síti "%1$s" — po odchodu se automaticky obnoví.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds je pozastaven v důvěryhodné Wi-Fi — po odchodu se obnoví.</string>
+    <string name="status_paused">Pozastaveno</string>
 </resources>

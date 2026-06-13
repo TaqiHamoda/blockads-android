@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">未连接 Wi-Fi（或需要定位权限）</string>
     <string name="trusted_networks_list_header">信任的 Wi-Fi</string>
     <string name="trusted_networks_empty">暂无信任的网络。添加当前网络以在其上暂停 BlockAds。</string>
+    <string name="trusted_networks_paused_title">已在信任的网络上暂停</string>
+    <string name="trusted_networks_paused_text">BlockAds 已在“%1$s”上暂停，离开该网络后自动恢复。</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds 已在信任的 Wi-Fi 上暂停，离开后自动恢复。</string>
+    <string name="status_paused">已暂停</string>
 </resources>

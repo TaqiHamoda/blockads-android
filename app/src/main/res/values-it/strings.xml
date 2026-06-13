@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Non connesso al Wi-Fi (o serve l\'autorizzazione alla posizione)</string>
     <string name="trusted_networks_list_header">Reti Wi-Fi attendibili</string>
     <string name="trusted_networks_empty">Nessuna rete attendibile. Aggiungi quella attuale per mettere in pausa BlockAds.</string>
+    <string name="trusted_networks_paused_title">In pausa su rete attendibile</string>
+    <string name="trusted_networks_paused_text">BlockAds è in pausa su "%1$s" — riprende automaticamente quando esci da questa rete.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds è in pausa su una rete Wi-Fi attendibile — riprende quando esci.</string>
+    <string name="status_paused">In pausa</string>
 </resources>

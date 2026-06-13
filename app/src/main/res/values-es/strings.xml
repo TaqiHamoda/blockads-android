@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Sin conexión Wi-Fi (o se necesita permiso de ubicación)</string>
     <string name="trusted_networks_list_header">Redes Wi-Fi de confianza</string>
     <string name="trusted_networks_empty">Aún no hay redes de confianza. Añade la actual para pausar BlockAds en ella.</string>
+    <string name="trusted_networks_paused_title">En pausa en red de confianza</string>
+    <string name="trusted_networks_paused_text">BlockAds está en pausa en "%1$s" — se reanuda automáticamente al salir de esta red.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds está en pausa en una red Wi-Fi de confianza — se reanuda al salir.</string>
+    <string name="status_paused">En pausa</string>
 </resources>

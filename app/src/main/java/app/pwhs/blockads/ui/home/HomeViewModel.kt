@@ -43,6 +43,14 @@ class HomeViewModel(
     val routingMode: StateFlow<String> = appPrefs.routingMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "local")
 
+    // Trusted networks (#197): true when BlockAds was auto-paused on a
+    // trusted Wi-Fi, so Home can show a distinct state instead of "Unprotected".
+    val pausedByTrusted: StateFlow<Boolean> = appPrefs.pausedByTrusted
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val pausedTrustedSsid: StateFlow<String> = appPrefs.pausedTrustedSsid
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     // ── Reactive VPN state (derived from the single source of truth) ──
     val vpnEnabled: StateFlow<Boolean> = combine(
         AdBlockVpnService.state,

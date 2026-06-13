@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Wi-Fi에 연결되어 있지 않음(또는 위치 권한 필요)</string>
     <string name="trusted_networks_list_header">신뢰할 수 있는 Wi-Fi</string>
     <string name="trusted_networks_empty">아직 신뢰할 수 있는 네트워크가 없습니다. 현재 네트워크를 추가하세요.</string>
+    <string name="trusted_networks_paused_title">신뢰할 수 있는 네트워크에서 일시중지됨</string>
+    <string name="trusted_networks_paused_text">"%1$s"에서 BlockAds가 일시중지되었습니다. 벗어나면 자동으로 재개됩니다.</string>
+    <string name="trusted_networks_paused_text_generic">신뢰할 수 있는 Wi-Fi에서 BlockAds가 일시중지되었습니다. 벗어나면 재개됩니다.</string>
+    <string name="status_paused">일시중지됨</string>
 </resources>

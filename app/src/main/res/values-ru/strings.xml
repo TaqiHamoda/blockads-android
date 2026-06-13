@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Нет подключения к Wi-Fi (или нужно разрешение на геолокацию)</string>
     <string name="trusted_networks_list_header">Доверенные сети Wi-Fi</string>
     <string name="trusted_networks_empty">Пока нет доверенных сетей. Добавьте текущую, чтобы приостанавливать BlockAds в ней.</string>
+    <string name="trusted_networks_paused_title">Пауза в доверенной сети</string>
+    <string name="trusted_networks_paused_text">BlockAds приостановлен в «%1$s» — возобновится, когда вы покинете сеть.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds приостановлен в доверенной сети Wi-Fi — возобновится при выходе.</string>
+    <string name="status_paused">Пауза</string>
 </resources>

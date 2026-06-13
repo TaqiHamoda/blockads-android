@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Nicht mit WLAN verbunden (oder Standortberechtigung nötig)</string>
     <string name="trusted_networks_list_header">Vertrauenswürdige WLANs</string>
     <string name="trusted_networks_empty">Noch keine vertrauenswürdigen Netzwerke. Füge dein aktuelles hinzu, um BlockAds dort zu pausieren.</string>
+    <string name="trusted_networks_paused_title">In vertrauenswürdigem Netzwerk pausiert</string>
+    <string name="trusted_networks_paused_text">BlockAds ist in "%1$s" pausiert – wird beim Verlassen automatisch fortgesetzt.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds ist in einem vertrauenswürdigen WLAN pausiert – wird beim Verlassen fortgesetzt.</string>
+    <string name="status_paused">Pausiert</string>
 </resources>

@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Tidak terhubung ke Wi-Fi (atau perlu izin lokasi)</string>
     <string name="trusted_networks_list_header">Wi-Fi tepercaya</string>
     <string name="trusted_networks_empty">Belum ada jaringan tepercaya. Tambahkan yang sedang dipakai untuk menjeda BlockAds.</string>
+    <string name="trusted_networks_paused_title">Dijeda di jaringan tepercaya</string>
+    <string name="trusted_networks_paused_text">BlockAds dijeda di "%1$s" — otomatis aktif lagi saat Anda pergi.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds dijeda di Wi-Fi tepercaya — aktif lagi saat Anda pergi.</string>
+    <string name="status_paused">Dijeda</string>
 </resources>

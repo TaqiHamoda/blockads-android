@@ -540,4 +540,8 @@ Desteklenen formatlar:
     <string name="trusted_networks_no_wifi">Wi-Fi\'ye bağlı değil (veya konum izni gerekli)</string>
     <string name="trusted_networks_list_header">Güvenilir Wi-Fi ağları</string>
     <string name="trusted_networks_empty">Henüz güvenilir ağ yok. BlockAds\'i duraklatmak için geçerli ağı ekleyin.</string>
+    <string name="trusted_networks_paused_title">Güvenilir ağda duraklatıldı</string>
+    <string name="trusted_networks_paused_text">BlockAds "%1$s" ağında duraklatıldı — bu ağdan ayrıldığınızda otomatik olarak devam eder.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds güvenilir bir Wi-Fi ağında duraklatıldı — ayrıldığınızda devam eder.</string>
+    <string name="status_paused">Duraklatıldı</string>
 </resources>

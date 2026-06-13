@@ -1,8 +1,12 @@
 package app.pwhs.blockads.service
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
+import app.pwhs.blockads.R
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -80,9 +84,20 @@ class TrustedNetworkManager(
         scope.launch {
             lock.withLock {
                 try {
-                    if (!appPrefs.getPauseOnTrustedEnabledSnapshot()) return@withLock
+                    // If the feature was turned off (or all SSIDs removed) while
+                    // we had auto-paused, resume protection and clear the notice.
+                    val featureOn = appPrefs.getPauseOnTrustedEnabledSnapshot()
                     val trusted = appPrefs.getTrustedSsidsSnapshot()
-                    if (trusted.isEmpty()) return@withLock
+                    if (!featureOn || trusted.isEmpty()) {
+                        if (appPrefs.getPausedByTrustedSnapshot() &&
+                            !(AdBlockVpnService.isRunning || RootProxyService.isRunning)
+                        ) {
+                            appPrefs.setPausedByTrusted(false)
+                            cancelPausedNotification()
+                            ServiceController.requestStart(context)
+                        }
+                        return@withLock
+                    }
 
                     val ssid = currentSsid(context)
                     val onTrusted = ssid != null && ssid in trusted
@@ -94,18 +109,23 @@ class TrustedNetworkManager(
                         // Entered a trusted network while protected → pause.
                         onTrusted && running -> {
                             Timber.d("Trusted network '$ssid' — pausing BlockAds")
-                            appPrefs.setPausedByTrusted(true)
+                            appPrefs.setPausedByTrusted(true, ssid ?: "")
                             ServiceController.requestStop(context)
+                            showPausedNotification(ssid ?: "")
                         }
                         // Left the trusted network and we had paused → resume.
                         !onTrusted && pausedByUs && !running -> {
                             Timber.d("Left trusted network (now '$ssid') — resuming BlockAds")
                             appPrefs.setPausedByTrusted(false)
+                            cancelPausedNotification()
                             ServiceController.requestStart(context)
                         }
                         // User manually started while on a trusted net, or any
                         // other state — clear the stale pause flag.
-                        running && pausedByUs -> appPrefs.setPausedByTrusted(false)
+                        running && pausedByUs -> {
+                            appPrefs.setPausedByTrusted(false)
+                            cancelPausedNotification()
+                        }
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "TrustedNetworkManager evaluate failed")
@@ -114,7 +134,53 @@ class TrustedNetworkManager(
         }
     }
 
+    private fun showPausedNotification(ssid: String) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                nm.createNotificationChannel(
+                    NotificationChannel(
+                        CHANNEL_ID,
+                        context.getString(R.string.trusted_networks_title),
+                        NotificationManager.IMPORTANCE_LOW
+                    ).apply { setShowBadge(false) }
+                )
+            }
+            val tapIntent = PendingIntent.getActivity(
+                context, 0,
+                android.content.Intent(context, app.pwhs.blockads.MainActivity::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val text = if (ssid.isNotEmpty())
+                context.getString(R.string.trusted_networks_paused_text, ssid)
+            else context.getString(R.string.trusted_networks_paused_text_generic)
+            val n = androidx.core.app.NotificationCompat.Builder(context, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_shield_off)
+                .setContentTitle(context.getString(R.string.trusted_networks_paused_title))
+                .setContentText(text)
+                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(text))
+                .setOngoing(false)
+                .setAutoCancel(false)
+                .setContentIntent(tapIntent)
+                .build()
+            nm.notify(NOTIFICATION_ID, n)
+        } catch (e: Exception) {
+            Timber.w(e, "showPausedNotification failed")
+        }
+    }
+
+    private fun cancelPausedNotification() {
+        try {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .cancel(NOTIFICATION_ID)
+        } catch (_: Exception) {
+        }
+    }
+
     companion object {
+        private const val CHANNEL_ID = "blockads_trusted_channel"
+        private const val NOTIFICATION_ID = 30
+
         /**
          * Returns the connected Wi-Fi SSID (without surrounding quotes), or null
          * if not on Wi-Fi / unavailable / location permission missing.

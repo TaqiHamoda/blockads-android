@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Brak połączenia Wi-Fi (lub wymagane uprawnienie do lokalizacji)</string>
     <string name="trusted_networks_list_header">Zaufane sieci Wi-Fi</string>
     <string name="trusted_networks_empty">Brak zaufanych sieci. Dodaj bieżącą, aby wstrzymać w niej BlockAds.</string>
+    <string name="trusted_networks_paused_title">Wstrzymano w zaufanej sieci</string>
+    <string name="trusted_networks_paused_text">BlockAds jest wstrzymany w sieci "%1$s" — wznowi się automatycznie po jej opuszczeniu.</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds jest wstrzymany w zaufanej sieci Wi-Fi — wznowi się po opuszczeniu.</string>
+    <string name="status_paused">Wstrzymano</string>
 </resources>

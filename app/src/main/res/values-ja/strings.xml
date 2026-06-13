@@ -519,4 +519,8 @@
     <string name="trusted_networks_no_wifi">Wi-Fi に未接続（または位置情報の許可が必要）</string>
     <string name="trusted_networks_list_header">信頼する Wi-Fi</string>
     <string name="trusted_networks_empty">信頼するネットワークはまだありません。現在のものを追加するとそこで BlockAds を一時停止します。</string>
+    <string name="trusted_networks_paused_title">信頼するネットワークで一時停止中</string>
+    <string name="trusted_networks_paused_text">BlockAds は「%1$s」で一時停止中です。離れると自動的に再開します。</string>
+    <string name="trusted_networks_paused_text_generic">BlockAds は信頼する Wi-Fi で一時停止中です。離れると再開します。</string>
+    <string name="status_paused">一時停止中</string>
 </resources>
