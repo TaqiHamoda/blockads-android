@@ -48,7 +48,7 @@ jobs:
 
       # Signing
       - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/blockads-release.jks
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > blockads-release.jks
 
       - name: Create key.properties
         run: |
