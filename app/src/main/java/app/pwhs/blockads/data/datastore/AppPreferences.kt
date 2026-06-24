@@ -74,6 +74,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_LOCKDOWN_DURATION = longPreferencesKey("lockdown_duration")
         private val KEY_COOLDOWN_START_TIMESTAMP = longPreferencesKey("cooldown_start_timestamp")
         private val KEY_LAST_ACTIVE_TIMESTAMP = longPreferencesKey("last_active_timestamp")
+        private val KEY_LAST_ACTIVE_REALTIME = longPreferencesKey("last_active_realtime")
 
         const val ROUTING_MODE_DIRECT = "direct"
         const val ROUTING_MODE_WIREGUARD = "wireguard"
@@ -168,6 +169,10 @@ class AppPreferences(private val context: Context) {
 
     val lastActiveTimestamp: Flow<Long> = context.dataStore.data.map { prefs ->
         prefs[KEY_LAST_ACTIVE_TIMESTAMP] ?: 0L
+    }
+
+    val lastActiveRealtime: Flow<Long> = context.dataStore.data.map { prefs ->
+        prefs[KEY_LAST_ACTIVE_REALTIME] ?: 0L
     }
 
     val autoReconnect: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -424,6 +429,12 @@ class AppPreferences(private val context: Context) {
     suspend fun setLastActiveTimestamp(timestamp: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_ACTIVE_TIMESTAMP] = timestamp
+        }
+    }
+
+    suspend fun setLastActiveRealtime(timestamp: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_ACTIVE_REALTIME] = timestamp
         }
     }
 

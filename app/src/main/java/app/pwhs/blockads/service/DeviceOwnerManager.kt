@@ -40,10 +40,8 @@ class DeviceOwnerManager(private val context: Context) {
         }
 
         val restrictions = listOf(
-            UserManager.DISALLOW_APPS_CONTROL,
             UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_DEBUGGING_FEATURES,
-            UserManager.DISALLOW_UNINSTALL_APPS
+            UserManager.DISALLOW_DEBUGGING_FEATURES
         )
 
         for (restriction in restrictions) {
@@ -67,10 +65,8 @@ class DeviceOwnerManager(private val context: Context) {
         }
 
         val restrictions = listOf(
-            UserManager.DISALLOW_APPS_CONTROL,
             UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_DEBUGGING_FEATURES,
-            UserManager.DISALLOW_UNINSTALL_APPS
+            UserManager.DISALLOW_DEBUGGING_FEATURES
         )
 
         for (restriction in restrictions) {

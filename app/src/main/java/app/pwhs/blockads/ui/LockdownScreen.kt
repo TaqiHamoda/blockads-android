@@ -14,6 +14,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pwhs.blockads.R
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun LockdownScreen(
@@ -24,17 +25,41 @@ fun LockdownScreen(
     onUnlockComplete: () -> Unit,
     onTimeTamperingDetected: () -> Unit
 ) {
+    val appPrefs: app.pwhs.blockads.data.datastore.AppPreferences = org.koin.compose.koinInject()
     // Prevent back navigation
     BackHandler(enabled = true) {}
 
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     var lastActiveTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var lastActiveRealtime by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
 
     // LaunchedEffect ticker running every 1 second
     LaunchedEffect(cooldownStart) {
         if (cooldownStart > 0L) {
+            val lastPersistedTime = appPrefs.lastActiveTimestamp.first()
+            val lastPersistedRealtime = appPrefs.lastActiveRealtime.first()
+            
+            val initialWall = System.currentTimeMillis()
+            val initialReal = android.os.SystemClock.elapsedRealtime()
+            
+            if (lastPersistedTime > 0L && lastPersistedRealtime > 0L) {
+                if (initialReal >= lastPersistedRealtime) {
+                    val wallDiff = initialWall - lastPersistedTime
+                    val realDiff = initialReal - lastPersistedRealtime
+                    if (initialWall < lastPersistedTime || (wallDiff - realDiff > 5 * 60 * 1000)) {
+                        onTimeTamperingDetected()
+                        return@LaunchedEffect
+                    }
+                }
+            }
+            
+            lastActiveTime = initialWall
+            lastActiveRealtime = initialReal
+            var ticksSinceSave = 0
+            
             while (true) {
                 currentTime = System.currentTimeMillis()
+                val currentRealtime = android.os.SystemClock.elapsedRealtime()
                 
                 // Clock tampering detection
                 if (currentTime < lastActiveTime) {
@@ -42,12 +67,23 @@ fun LockdownScreen(
                     break
                 }
                 
-                if (currentTime - lastActiveTime > 5 * 60 * 1000) {
+                val wallClockElapsed = currentTime - lastActiveTime
+                val monotonicElapsed = currentRealtime - lastActiveRealtime
+                
+                if (wallClockElapsed - monotonicElapsed > 5 * 60 * 1000) {
                      onTimeTamperingDetected()
                      break
                 }
                 
                 lastActiveTime = currentTime
+                lastActiveRealtime = currentRealtime
+                
+                ticksSinceSave++
+                if (ticksSinceSave >= 10) {
+                    appPrefs.setLastActiveTimestamp(currentTime)
+                    appPrefs.setLastActiveRealtime(currentRealtime)
+                    ticksSinceSave = 0
+                }
 
                 val elapsed = currentTime - cooldownStart
                 if (elapsed >= duration) {
