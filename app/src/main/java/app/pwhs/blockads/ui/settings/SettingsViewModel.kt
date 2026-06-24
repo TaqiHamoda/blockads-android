@@ -32,13 +32,16 @@ import app.pwhs.blockads.worker.FilterUpdateScheduler
 import app.pwhs.blockads.service.IptablesManager
 import app.pwhs.blockads.service.RootProxyService
 import app.pwhs.blockads.utils.CrashReportingManager
+import app.pwhs.blockads.service.DeviceOwnerManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -55,6 +58,13 @@ class SettingsViewModel(
     private val firewallRuleDao: FirewallRuleDao,
     application: Application,
 ) : AndroidViewModel(application) {
+
+    private val deviceOwnerManager = DeviceOwnerManager(application)
+    private val _isDeviceOwner = MutableStateFlow(deviceOwnerManager.isDeviceOwner())
+    val isDeviceOwner: StateFlow<Boolean> = _isDeviceOwner.asStateFlow()
+
+    private val _restrictionsEnforced = MutableStateFlow(deviceOwnerManager.areRestrictionsEnforced())
+    val restrictionsEnforced: StateFlow<Boolean> = _restrictionsEnforced.asStateFlow()
 
     val autoReconnect: StateFlow<Boolean> = appPrefs.autoReconnect
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -476,4 +486,16 @@ class SettingsViewModel(
     private fun requestVpnRestart() {
         ServiceController.requestRestart(getApplication<Application>().applicationContext)
     }
+
+    fun setRestrictionsEnforced(enforced: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (enforced) {
+                deviceOwnerManager.enforceRestrictions()
+            } else {
+                deviceOwnerManager.clearRestrictions()
+            }
+            _restrictionsEnforced.value = enforced
+        }
+    }
+
 }

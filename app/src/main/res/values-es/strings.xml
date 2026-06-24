@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">Al cancelar, el temporizador se restablecerá a la duración completa.</string>
     <string name="lockdown_screen_duration">Duración del temporizador: %1$s</string>
     <string name="lockdown_screen_start">Iniciar temporizador de enfriamiento</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Administrador del dispositivo para hacer cumplir la persistencia y las restricciones de política para BlockAds.</string>
+    <string name="settings_device_owner_section_title">Control del propietario del dispositivo</string>
+    <string name="settings_device_owner_section_desc">Administre las restricciones del propietario del dispositivo. Solo visible porque BlockAds es un propietario de dispositivo.</string>
+    <string name="settings_device_owner_enforce_restrictions">Restricciones del dispositivo</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Habilitar para aplicar restricciones a nivel de aplicación (evitar desinstalación, etc.). Deshabilitar para borrarlas.</string>
 </resources>

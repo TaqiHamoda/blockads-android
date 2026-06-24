@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">Membatalkan akan mengatur ulang penghitung waktu kembali ke durasi penuh.</string>
     <string name="lockdown_screen_duration">Durasi Pengatur Waktu: %1$s</string>
     <string name="lockdown_screen_start">Mulai Waktu Tunggu</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Administrator Perangkat untuk menegakkan persistensi dan batasan kebijakan untuk BlockAds.</string>
+    <string name="settings_device_owner_section_title">Kontrol Pemilik Perangkat</string>
+    <string name="settings_device_owner_section_desc">Kelola batasan Pemilik Perangkat. Hanya terlihat karena BlockAds adalah Pemilik Perangkat.</string>
+    <string name="settings_device_owner_enforce_restrictions">Batasan Perangkat</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Aktifkan untuk menerapkan batasan tingkat aplikasi (mencegah pencopotan pemasangan, dll). Nonaktifkan untuk menghapusnya.</string>
 </resources>

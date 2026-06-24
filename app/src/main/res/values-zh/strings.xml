@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">取消将使倒计时重置回完整时间。</string>
     <string name="lockdown_screen_duration">倒计时：%1$s</string>
     <string name="lockdown_screen_start">启动冷却倒计时</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">设备管理员可强制执行 BlockAds 的持久性和策略限制。</string>
+    <string name="settings_device_owner_section_title">设备所有者控制</string>
+    <string name="settings_device_owner_section_desc">管理设备所有者限制。 仅由于 BlockAds 是设备所有者而可见。</string>
+    <string name="settings_device_owner_enforce_restrictions">设备限制</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">启用以应用应用程序级别的限制（防止卸载等）。禁用以清除它们。</string>
 </resources>

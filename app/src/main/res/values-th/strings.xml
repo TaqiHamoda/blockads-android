@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">การยกเลิกจะรีเซ็ตตัวนับเวลากลับเป็นระยะเวลาเต็ม</string>
     <string name="lockdown_screen_duration">ระยะเวลา: %1$s</string>
     <string name="lockdown_screen_start">เริ่มตัวนับเวลาพัก</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">ผู้ดูแลอุปกรณ์เพื่อบังคับใช้ความต่อเนื่องและข้อจำกัดนโยบายสำหรับ BlockAds</string>
+    <string name="settings_device_owner_section_title">การควบคุมเจ้าของอุปกรณ์</string>
+    <string name="settings_device_owner_section_desc">จัดการข้อจำกัดของเจ้าของอุปกรณ์ แสดงให้เห็นเนื่องจาก BlockAds เป็นเจ้าของอุปกรณ์</string>
+    <string name="settings_device_owner_enforce_restrictions">ข้อจำกัดอุปกรณ์</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">เปิดใช้งานเพื่อใช้ข้อจำกัดระดับแอพ (ป้องกันการถอนการติดตั้ง ฯลฯ) ปิดใช้งานเพื่อล้างข้อมูล</string>
 </resources>

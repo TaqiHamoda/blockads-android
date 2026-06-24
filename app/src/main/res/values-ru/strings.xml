@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">При отмене таймер вернется к полному времени.</string>
     <string name="lockdown_screen_duration">Длительность таймера: %1$s</string>
     <string name="lockdown_screen_start">Запустить таймер</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Администратор устройства для обеспечения устойчивости и ограничений политики для BlockAds.</string>
+    <string name="settings_device_owner_section_title">Контроль владельца устройства</string>
+    <string name="settings_device_owner_section_desc">Управление ограничениями владельца устройства. Видно только потому, что BlockAds является владельцем устройства.</string>
+    <string name="settings_device_owner_enforce_restrictions">Ограничения устройства</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Включите, чтобы применить ограничения на уровне приложения (предотвратить удаление и т.д.). Отключите, чтобы очистить их.</string>
 </resources>

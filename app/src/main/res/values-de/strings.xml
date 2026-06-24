@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">Beim Abbrechen wird der Timer wieder auf die volle Dauer zurückgesetzt.</string>
     <string name="lockdown_screen_duration">Timer-Dauer: %1$s</string>
     <string name="lockdown_screen_start">Abkling-Timer starten</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Geräteadministrator zur Durchsetzung von Persistenz und Richtlinieneinschränkungen für BlockAds.</string>
+    <string name="settings_device_owner_section_title">Gerätebesitzer-Steuerung</string>
+    <string name="settings_device_owner_section_desc">Gerätebesitzereinschränkungen verwalten. Nur sichtbar, da BlockAds ein Gerätebesitzer ist.</string>
+    <string name="settings_device_owner_enforce_restrictions">Geräteeinschränkungen</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Aktivieren, um Einschränkungen auf App-Ebene anzuwenden (Deinstallation verhindern usw.). Deaktivieren, um sie zu löschen.</string>
 </resources>

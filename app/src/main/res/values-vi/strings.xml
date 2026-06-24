@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">Việc hủy sẽ đặt lại bộ đếm thời gian về thời lượng đầy đủ.</string>
     <string name="lockdown_screen_duration">Thời gian: %1$s</string>
     <string name="lockdown_screen_start">Bắt đầu Bộ đếm thời gian</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Quản trị viên thiết bị để thực thi tính bền bỉ và các hạn chế chính sách đối với BlockAds.</string>
+    <string name="settings_device_owner_section_title">Kiểm soát chủ sở hữu thiết bị</string>
+    <string name="settings_device_owner_section_desc">Quản lý các hạn chế của Chủ sở hữu thiết bị. Chỉ hiển thị vì BlockAds là Chủ sở hữu thiết bị.</string>
+    <string name="settings_device_owner_enforce_restrictions">Giới hạn thiết bị</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Bật để áp dụng các hạn chế cấp ứng dụng (ngăn gỡ cài đặt, v.v.). Tắt để xóa chúng.</string>
 </resources>

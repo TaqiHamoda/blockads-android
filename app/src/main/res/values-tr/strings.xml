@@ -567,4 +567,11 @@ Desteklenen formatlar:
     <string name="lockdown_screen_cancel_desc">İptal etmek sayacı tam süreye sıfırlayacaktır.</string>
     <string name="lockdown_screen_duration">Sayaç Süresi: %1$s</string>
     <string name="lockdown_screen_start">Bekleme Sayacını Başlat</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">BlockAds için kalıcılık ve politika kısıtlamalarını zorlayacak cihaz yöneticisi.</string>
+    <string name="settings_device_owner_section_title">Cihaz Sahibi Kontrolü</string>
+    <string name="settings_device_owner_section_desc">Cihaz Sahibi kısıtlamalarını yönetin. Sadece BlockAds Cihaz Sahibi olduğu için görünür.</string>
+    <string name="settings_device_owner_enforce_restrictions">Cihaz Kısıtlamaları</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Uygulama düzeyinde kısıtlamalar uygulamak için etkinleştirin (kaldırmayı önleme vb.). Temizlemek için devre dışı bırakın.</string>
 </resources>

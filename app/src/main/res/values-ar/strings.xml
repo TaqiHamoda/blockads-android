@@ -562,4 +562,11 @@
     <string name="lockdown_screen_cancel_desc">سيؤدي الإلغاء إلى إعادة تعيين المؤقت للوقت الكامل.</string>
     <string name="lockdown_screen_duration">مدة المؤقت: %1$s</string>
     <string name="lockdown_screen_start">بدء مؤقت التهدئة</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">مسؤول الجهاز لفرض الاستمرارية وقيود السياسة لـ BlockAds.</string>
+    <string name="settings_device_owner_section_title">التحكم في مالك الجهاز</string>
+    <string name="settings_device_owner_section_desc">إدارة قيود مالك الجهاز. مرئي فقط لأن BlockAds هو مالك الجهاز.</string>
+    <string name="settings_device_owner_enforce_restrictions">قيود الجهاز</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">قم بالتمكين لتطبيق قيود على مستوى التطبيق (منع إلغاء التثبيت ، وما إلى ذلك). قم بالتعطيل لمسحها.</string>
 </resources>

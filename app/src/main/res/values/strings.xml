@@ -579,4 +579,10 @@
     <string name="lockdown_screen_cancel_desc">Canceling will reset the timer back to the full duration.</string>
     <string name="lockdown_screen_duration">Timer Duration: %1$s</string>
     <string name="lockdown_screen_start">Start Cooldown Timer</string>
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Device Administrator to enforce persistence and policy restrictions for BlockAds.</string>
+    <string name="settings_device_owner_section_title">Device Owner Control</string>
+    <string name="settings_device_owner_section_desc">Manage Device Owner restrictions. Only visible because BlockAds is a Device Owner.</string>
+    <string name="settings_device_owner_enforce_restrictions">Device Restrictions</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Enable to apply app-level restrictions (prevent uninstallation, etc). Disable to clear them.</string>
 </resources>

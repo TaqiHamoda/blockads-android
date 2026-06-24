@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">ביטול יאפס את הטיימר בחזרה למשך הזמן המלא.</string>
     <string name="lockdown_screen_duration">משך הטיימר: %1$s</string>
     <string name="lockdown_screen_start">הפעל טיימר צינון</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">מנהל מכשיר לאכיפת התמדה והגבלות מדיניות עבור BlockAds.</string>
+    <string name="settings_device_owner_section_title">שליטת בעל המכשיר</string>
+    <string name="settings_device_owner_section_desc">נהל את הגבלות בעל המכשיר. נראה רק בגלל ש- BlockAds הוא בעל המכשיר.</string>
+    <string name="settings_device_owner_enforce_restrictions">הגבלות מכשיר</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">הפעל כדי להחיל הגבלות ברמת האפליקציה (מניעת הסרה וכו\'). השבת כדי למחוק אותן.</string>
 </resources>

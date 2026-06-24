@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">L\'annulation réinitialisera le minuteur à sa durée totale.</string>
     <string name="lockdown_screen_duration">Durée du minuteur : %1$s</string>
     <string name="lockdown_screen_start">Démarrer le minuteur de refroidissement</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Administrateur de l\'appareil pour appliquer la persistance et les restrictions de stratégie pour BlockAds.</string>
+    <string name="settings_device_owner_section_title">Contrôle du propriétaire de l\'appareil</string>
+    <string name="settings_device_owner_section_desc">Gérez les restrictions du propriétaire de l\'appareil. Visible uniquement car BlockAds est un propriétaire de l\'appareil.</string>
+    <string name="settings_device_owner_enforce_restrictions">Restrictions de l\'appareil</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Activer pour appliquer des restrictions au niveau de l\'application (empêcher la désinstallation, etc.). Désactiver pour les effacer.</string>
 </resources>

@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">キャンセルすると、タイマーは元の時間に戻ります。</string>
     <string name="lockdown_screen_duration">タイマー時間：%1$s</string>
     <string name="lockdown_screen_start">クールダウンタイマーを開始</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">BlockAdsの永続性とポリシー制限を適用するデバイス管理者。</string>
+    <string name="settings_device_owner_section_title">デバイス所有者コントロール</string>
+    <string name="settings_device_owner_section_desc">デバイス所有者の制限を管理します。BlockAdsがデバイス所有者であるため、表示されます。</string>
+    <string name="settings_device_owner_enforce_restrictions">デバイス制限</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">アプリレベルの制限（アンインストールの防止など）を適用するには有効にします。クリアするには無効にします。</string>
 </resources>

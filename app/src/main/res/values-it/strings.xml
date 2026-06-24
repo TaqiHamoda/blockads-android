@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">L\'annullamento ripristinerà il timer alla durata intera.</string>
     <string name="lockdown_screen_duration">Durata del timer: %1$s</string>
     <string name="lockdown_screen_start">Avvia timer di raffreddamento</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Amministratore del dispositivo per applicare la persistenza e le restrizioni sui criteri per BlockAds.</string>
+    <string name="settings_device_owner_section_title">Controllo del proprietario del dispositivo</string>
+    <string name="settings_device_owner_section_desc">Gestisci le restrizioni del proprietario del dispositivo. Visibile solo perché BlockAds è un proprietario del dispositivo.</string>
+    <string name="settings_device_owner_enforce_restrictions">Restrizioni del dispositivo</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Abilita per applicare restrizioni a livello di app (impedire la disinstallazione, ecc.). Disabilita per cancellarle.</string>
 </resources>

@@ -546,4 +546,11 @@
     <string name="lockdown_screen_cancel_desc">Zrušením se časovač resetuje zpět na plnou dobu.</string>
     <string name="lockdown_screen_duration">Doba trvání časovače: %1$s</string>
     <string name="lockdown_screen_start">Spustit časovač uklidnění</string>
+
+    <!-- Device Owner Mode -->
+    <string name="device_admin_description">Správce zařízení k vynucení persistence a omezení zásad pro BlockAds.</string>
+    <string name="settings_device_owner_section_title">Ovládání vlastníka zařízení</string>
+    <string name="settings_device_owner_section_desc">Správa omezení vlastníka zařízení. Viditelné pouze proto, že BlockAds je vlastník zařízení.</string>
+    <string name="settings_device_owner_enforce_restrictions">Omezení zařízení</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Povolit pro uplatnění omezení na úrovni aplikace (zabrání odinstalaci atd.). Zakázat pro jejich vymazání.</string>
 </resources>
