@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 import java.util.Locale
@@ -97,11 +98,24 @@ class AdBlockVpnService : VpnService() {
         private const val ALERT_CHANNEL_ID = "blockads_vpn_alert_channel"
         private const val NETWORK_STABILIZATION_DELAY_MS = 2000L
         private const val RESTART_CLEANUP_DELAY_MS = 1000L
+
+        // How long stopVpn() waits for the native Go engine teardown before
+        // completing the service shutdown regardless (see stopVpn, #232).
+        private const val GO_STOP_TIMEOUT_MS = 5_000L
         const val ACTION_START = "app.pwhs.blockads.START_VPN"
         const val ACTION_STOP = "app.pwhs.blockads.STOP_VPN"
         const val ACTION_PAUSE_1H = "app.pwhs.blockads.PAUSE_VPN_1H"
         const val ACTION_RESTART = "app.pwhs.blockads.RESTART_VPN"
         const val EXTRA_STARTED_FROM_BOOT = "extra_started_from_boot"
+
+        // When a VPN session is (re)established, Android revokes the
+        // previous session and delivers onRevoke() to the (single) service
+        // instance a few seconds later. Because the Go engine + userspace
+        // stack are shared across sessions, honouring that stale revoke
+        // tears down the freshly-established session and blackholes all
+        // traffic (fatal for full-tunnel HTTPS filtering). Ignore any
+        // revoke that arrives within this grace window after an establish.
+        private const val REVOKE_GRACE_MS = 10_000L
 
         // ── Reactive VPN state ────────────────────────────────────────
         private val _state = MutableStateFlow(VpnState.STOPPED)
@@ -172,6 +186,9 @@ class AdBlockVpnService : VpnService() {
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    // elapsedRealtime() of the last successful builder.establish(); used to
+    // filter out the stale onRevoke of a superseded session (see REVOKE_GRACE_MS).
+    @Volatile private var lastVpnEstablishedAt: Long = 0L
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var filterRepo: FilterListRepository
     private lateinit var appPrefs: AppPreferences
@@ -214,12 +231,26 @@ class AdBlockVpnService : VpnService() {
     var connectingPhase: String = ""
         private set
 
+    @Volatile
+    private var isRecordDnsLogsEnabled = true
+
     override fun onCreate() {
         super.onCreate()
         val koin = org.koin.java.KoinJavaComponent.getKoin()
         filterRepo = koin.get()
         appPrefs = koin.get()
         dnsLogDao = koin.get()
+
+        serviceScope.launch {
+            appPrefs.recordDnsLogs.collect { enabled ->
+                isRecordDnsLogsEnabled = enabled
+                // Push it into the engine too, so connection logging stops
+                // resolving per-flow app identity the moment it's turned off.
+                if (::goTunnelAdapter.isInitialized) {
+                    goTunnelAdapter.setConnLogEnabled(enabled)
+                }
+            }
+        }
 
         appNameResolver = AppNameResolver(this)
         goTunnelAdapter = GoTunnelAdapter(
@@ -229,6 +260,7 @@ class AdBlockVpnService : VpnService() {
             scope = serviceScope,
             appNameResolver = appNameResolver,
             firewallManagerProvider = { firewallManager },
+            recordLogProvider = { isRecordDnsLogsEnabled },
         )
 
         firewallRuleDao = koin.get()
@@ -410,6 +442,8 @@ class AdBlockVpnService : VpnService() {
 
                 // Load HTTPS Filtering setting
                 val httpsFilteringEnabled = appPrefs.getHttpsFilteringEnabledSnapshot()
+                // Full-tunnel mode is always enabled: all traffic is routed
+                // through the direct-TUN engine (StartFull).
 
 
 
@@ -427,7 +461,7 @@ class AdBlockVpnService : VpnService() {
 
                 var vpnEstablished = false
                 while (!vpnEstablished && retryManager.shouldRetry()) {
-                    vpnEstablished = establishVpn(whitelistedApps, httpsFilteringEnabled)
+                    vpnEstablished = establishVpn(whitelistedApps)
 
                     if (!vpnEstablished && retryManager.shouldRetry()) {
                         Timber
@@ -541,6 +575,7 @@ class AdBlockVpnService : VpnService() {
                 // Read further HTTPS Filtering config (httpsFilteringEnabled is already loaded at the top)
                 val selectedBrowsers = appPrefs.getSelectedBrowsersSnapshot()
                 val certDir = filesDir.absolutePath
+                val filterHttp3 = appPrefs.getFilterHttp3Snapshot()
 
                 vpnInterface?.let {
                     // start() blocks the coroutine while reading from TUN
@@ -551,6 +586,7 @@ class AdBlockVpnService : VpnService() {
                         httpsFilteringEnabled = httpsFilteringEnabled,
                         selectedBrowsers = selectedBrowsers,
                         certDir = certDir,
+                        filterHttp3 = filterHttp3,
                         socketProtector = { fd ->
                             try {
                                 protect(fd)
@@ -570,8 +606,7 @@ class AdBlockVpnService : VpnService() {
     }
 
     private fun establishVpn(
-        whitelistedApps: Set<String>,
-        httpsFilteringEnabled: Boolean
+        whitelistedApps: Set<String>
     ): Boolean {
         // First check if the system still grants us the VPN permission.
         if (VpnService.prepare(this) != null) {
@@ -655,7 +690,7 @@ class AdBlockVpnService : VpnService() {
                 b
             } else {
                 // Direct mode — DNS + (optional) HTTPS local asset host.
-                Timber.d("Establishing VPN in DNS-only mode (httpsFiltering=$httpsFilteringEnabled)")
+                Timber.d("Establishing VPN in direct mode (fullTunnel=true)")
                 val b = Builder()
                     .setSession("BlockAds")
                     .addAddress("10.0.0.2", 32)
@@ -676,16 +711,32 @@ class AdBlockVpnService : VpnService() {
                 // leak is instead surfaced to the user via a warning
                 // (see NetworkMonitor.isPrivateDnsActive); a proper capture
                 // needs engine-level DoT handling (tracked in #145).
+                //
+                // NOTE (full-tunnel HTTPS filtering, WIP): routing 0.0.0.0/0
+                // here to feed the userspace stack was tried and blackholed
+                // all non-DNS traffic on-device — the parallel gVisor stack
+                // path does not yet reliably relay general TCP flows (it was
+                // only ever exercised for the local asset host). Kept on the
+                // narrow asset route until the stack-forwarding path is
+                // proven with the diagnostics added in startTcpStackParallel.
 
-                if (httpsFilteringEnabled) {
-                    // Route the synthetic IP range used for the local
-                    // asset host (engine maps local.pwhs.app → 198.51.100.1)
-                    // so the browser's request enters the TUN and the
-                    // userspace stack can serve cosmetic.css / scriptlets.js
-                    // / sl-<host>.js from memory. RFC 5737 documentation
-                    // prefix — never collides with real Internet traffic.
-                    b.addRoute("198.51.100.0", 24)
-                }
+                // Full-network capture (IPv4) — always enabled. This feeds
+                // the DEDICATED full-tunnel data path (GoTunnelAdapter →
+                // engine.startFull), where gVisor reads the TUN directly — no
+                // DnsInterceptor/packetPipe bridge, so it doesn't deadlock
+                // under browser load like the legacy parallel-stack path did.
+                // The stack MITMs browser TCP, answers DNS on :53, and passes
+                // everything else through a socket-protected dialer.
+                //
+                // IPv6 is deliberately NOT routed (no `::/0`): the Go
+                // process usually has no working v6 route on mobile, so
+                // tunnelled v6 would blackhole. v6 egresses directly
+                // (unfiltered); browsers fall back to v4 for filtered
+                // sites. DoT(853) is closed fast in the stack handler to
+                // force plaintext DNS on 53. Private/loopback dests are
+                // short-circuited to a direct dial by the handler's
+                // Gate 0, so LAN stays reachable without an exclude route.
+                b.addRoute("0.0.0.0", 0)
                 b
             }
 
@@ -735,6 +786,7 @@ class AdBlockVpnService : VpnService() {
                 Timber.e("Failed to establish VPN interface")
                 return false
             }
+            lastVpnEstablishedAt = android.os.SystemClock.elapsedRealtime()
 
             true
         } catch (e: Exception) {
@@ -876,13 +928,20 @@ class AdBlockVpnService : VpnService() {
 
         // Move ALL blocking Go native calls off the main thread
         serviceScope.launch(Dispatchers.IO) {
-            // Stop Go tunnel engine (this is the heavy native call that was causing ANR)
-            goTunnelAdapter.stop()
+            // Persist "off" FIRST: everything else here can block, and a slow
+            // teardown must not leave the flag saying the VPN should be on
+            // (BootReceiver / auto-reconnect / trusted-network logic read it).
+            appPrefs.setVpnEnabled(false)
 
-            runBlocking {
-                appPrefs.setVpnEnabled(false)
-            }
-
+            // Close OUR TUN fd before the Go stop, not after (#232). The Go
+            // engine dup()s the fd, so the tun interface — and with it the
+            // system VPN key indicator — stays alive until *both* copies are
+            // closed. Go closes its dup at the top of engine.stop(), but our
+            // copy used to be closed only once that whole call returned, i.e.
+            // after resolver shutdown + gVisor stack close, which can take
+            // seconds (or block indefinitely on a long-lived flow). Closing
+            // here makes the indicator disappear as soon as Go drops its dup,
+            // regardless of how long the rest of the teardown takes.
             try {
                 vpnInterface?.close()
             } catch (e: Exception) {
@@ -890,8 +949,25 @@ class AdBlockVpnService : VpnService() {
             }
             vpnInterface = null
 
+            // Stop Go tunnel engine (this is the heavy native call that was
+            // causing ANR). Detached + time-boxed: a native stop that hangs
+            // must not keep the service stuck in STOPPING with a "Stopping…"
+            // notification forever. NonCancellable so it still finishes its
+            // cleanup after stopSelf() cancels serviceScope.
+            val goStop = serviceScope.launch(NonCancellable) { goTunnelAdapter.stop() }
+            if (withTimeoutOrNull(GO_STOP_TIMEOUT_MS) { goStop.join() } == null) {
+                Timber.w("Go tunnel stop still running after ${GO_STOP_TIMEOUT_MS}ms — finishing shutdown anyway")
+            }
+
             // Switch back to main thread for UI/Service lifecycle operations
             withContext(Dispatchers.Main) {
+                // A start/restart may have taken over while we were waiting on
+                // the native stop (the timeout above lets us get here even when
+                // it hangs). Never tear down a session that is no longer ours.
+                if (_state.value != VpnState.STOPPING) {
+                    Timber.w("Shutdown superseded by ${_state.value} — leaving the new session alone")
+                    return@withContext
+                }
                 _state.value = VpnState.STOPPED
                 lastStoppedTimestamp = System.currentTimeMillis()
                 _privateDnsStrict.value = false
@@ -912,6 +988,18 @@ class AdBlockVpnService : VpnService() {
     }
 
     override fun onRevoke() {
+        // A revoke arriving right after we (re)established a session is the
+        // OLD session being superseded (e.g. during a settings restart), not
+        // a genuine user/system revoke. Honouring it would call stopVpn() →
+        // engine.stop(), tearing down the freshly-established session (the Go
+        // engine/stack are shared across sessions) and blackholing all
+        // traffic. Ignore it; the new session stays up.
+        val sinceEstablish = android.os.SystemClock.elapsedRealtime() - lastVpnEstablishedAt
+        if (sinceEstablish in 0 until REVOKE_GRACE_MS) {
+            Timber.w("Ignoring stale onRevoke (${sinceEstablish}ms after establish — superseded session)")
+            return
+        }
+
         Timber.w("VPN revoked by system or user")
         // Update preferences to reflect VPN is no longer enabled
         // Use a non-cancellable context to ensure preference is updated

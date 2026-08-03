@@ -220,7 +220,17 @@ func (s *TcpIpStack) HandleUDP(conn adapter.UDPConn) {
 		_ = conn.Close()
 		return
 	}
-	h(conn)
+	// CRITICAL: run the UDP handler on its own goroutine. tun2socks'
+	// withUDPHandler invokes this callback SYNCHRONOUSLY on the stack's
+	// dispatch goroutine (the single goroutine that reads packets from the
+	// TUN / link endpoint). A handler that blocks — the DNS read loop, a
+	// UDP relay's bidiCopy — would otherwise stall the entire dispatch and
+	// wedge ALL traffic (observed under load: dispatchLoop parked in
+	// handleDNSOverUDP→conn.Read while no further packets were processed).
+	// The TCP forwarder already dispatches its handler on a fresh goroutine;
+	// UDP does not, so we must. The conn (a gonet UDPConn backed by a
+	// registered endpoint) stays valid after the callback returns.
+	go h(conn)
 }
 
 // Compile-time assertion that TcpIpStack implements the tun2socks

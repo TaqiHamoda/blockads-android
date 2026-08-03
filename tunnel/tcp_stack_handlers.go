@@ -36,6 +36,18 @@ func newProtectedTcpHandler(uidr UIDResolver, protectFn func(fd int) bool) TcpFl
 		flow := tcpFlowID(conn)
 		uid := resolveFlowUID(uidr, ProtocolTCP, flow)
 
+		if flow.serverIP.IsUnspecified() {
+			return
+		}
+
+		// Close DNS-over-TLS (port 853) fast so Android falls back to
+		// plaintext DNS on port 53 (the engine's filterable path) instead
+		// of stalling on a dial to the fake DNS server. See the matching
+		// gate in newMitmTcpHandler.
+		if flow.serverPort == 853 {
+			return
+		}
+
 		dst := net.JoinHostPort(flow.serverIP.String(), fmt.Sprintf("%d", flow.serverPort))
 		dialer := &net.Dialer{
 			Timeout: flowDialTimeout,
@@ -74,6 +86,10 @@ func newProtectedUdpHandler(uidr UIDResolver, protectFn func(fd int) bool) UdpFl
 
 		flow := udpFlowID(conn)
 		uid := resolveFlowUID(uidr, ProtocolUDP, flow)
+
+		if flow.serverIP.IsUnspecified() {
+			return
+		}
 
 		dst := &net.UDPAddr{IP: flow.serverIP, Port: flow.serverPort}
 		dialer := &net.Dialer{

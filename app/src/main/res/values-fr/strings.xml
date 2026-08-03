@@ -561,4 +561,7 @@
     <string name="settings_device_owner_section_desc">Gérez les restrictions du propriétaire de l\'appareil. Visible uniquement car BlockAds est un propriétaire de l\'appareil.</string>
     <string name="settings_device_owner_enforce_restrictions">Restrictions de l\'appareil</string>
     <string name="settings_device_owner_enforce_restrictions_desc">Activer pour appliquer des restrictions au niveau de l\'application (bloquer les outils de développement, etc.). Désactiver pour les effacer.</string>
+    <string name="https_filtering_http3_title">Filtrer HTTP/3 (QUIC)</string>
+    <string name="https_filtering_http3_desc">Bloquer QUIC du navigateur pour forcer les connexions filtrables pour un filtrage maximal des publicités. Peut entraîner le chargement partiel de certaines pages. Désactivez si les pages ne se chargent pas complètement.</string>
+    <string name="log_record_logs">Enregistrer les journaux</string>
 </resources>

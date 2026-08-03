@@ -56,8 +56,8 @@ android {
         applicationId = "app.pwhs.blockads"
         minSdk = 24
         targetSdk = 36
-        versionCode = 50
-        versionName = "6.5.1"
+        versionCode = 51
+        versionName = "6.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -93,6 +93,13 @@ android {
             if (useReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
+        }
+        debug {
+            // Distinct applicationId so the debug test build installs
+            // alongside a release install (different signature) without
+            // wiping the user's configured app. FileProvider authority is
+            // ${applicationId}.fileprovider, so it stays unique too.
+            applicationIdSuffix = ".debug"
         }
     }
 

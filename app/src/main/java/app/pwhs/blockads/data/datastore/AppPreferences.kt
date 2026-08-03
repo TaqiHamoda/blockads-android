@@ -59,6 +59,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_WG_PROFILES_JSON = stringPreferencesKey("wg_profiles_json")
         private val KEY_WG_ACTIVE_PROFILE_ID = stringPreferencesKey("wg_active_profile_id")
         private val KEY_HTTPS_FILTERING_ENABLED = booleanPreferencesKey("https_filtering_enabled")
+        private val KEY_FILTER_HTTP3 = booleanPreferencesKey("filter_http3")
         private val KEY_SELECTED_BROWSERS = stringSetPreferencesKey("selected_browsers")
         private val KEY_NETWORK_SWITCH_DELAY_ENABLED = booleanPreferencesKey("network_switch_delay_enabled")
         private val KEY_NETWORK_SWITCH_DELAY_SEC = intPreferencesKey("network_switch_delay_sec")
@@ -77,6 +78,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_LAST_ACTIVE_REALTIME = longPreferencesKey("last_active_realtime")
         private val KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED =
             booleanPreferencesKey("device_owner_restrictions_enabled")
+        private val KEY_RECORD_DNS_LOGS = booleanPreferencesKey("record_dns_logs")
 
         const val ROUTING_MODE_DIRECT = "direct"
         const val ROUTING_MODE_WIREGUARD = "wireguard"
@@ -303,6 +305,10 @@ class AppPreferences(private val context: Context) {
         context.dataStore.data.map { prefs ->
             prefs[KEY_ACCENT_COLOR] ?: ACCENT_GREEN
         }
+
+    val recordDnsLogs: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_RECORD_DNS_LOGS] ?: true
+    }
 
     val firewallEnabled: Flow<Boolean> =
         context.dataStore.data.map { prefs ->
@@ -629,6 +635,12 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setRecordDnsLogs(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_RECORD_DNS_LOGS] = enabled
+        }
+    }
+
     suspend fun setFirewallEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_FIREWALL_ENABLED] = enabled
@@ -773,6 +785,24 @@ class AppPreferences(private val context: Context) {
 
     suspend fun getHttpsFilteringEnabledSnapshot(): Boolean {
         return context.dataStore.data.first()[KEY_HTTPS_FILTERING_ENABLED] ?: false
+    }
+
+    // HTTP/3 (QUIC) filtering. Default OFF: QUIC is relayed so pages load
+    // fully/smoothly (DNS ad-blocking still applies). ON: browser QUIC is
+    // dropped to force filterable TCP TLS — more in-page filtering but some
+    // sites may load partially.
+    val filterHttp3: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_FILTER_HTTP3] ?: false
+    }
+
+    suspend fun setFilterHttp3(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_FILTER_HTTP3] = enabled
+        }
+    }
+
+    suspend fun getFilterHttp3Snapshot(): Boolean {
+        return context.dataStore.data.first()[KEY_FILTER_HTTP3] ?: false
     }
 
     suspend fun setSelectedBrowsers(packages: Set<String>) {

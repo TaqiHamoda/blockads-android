@@ -536,7 +536,7 @@
     <string name="trusted_networks_list_header">شبكات Wi-Fi الموثوقة</string>
     <string name="trusted_networks_empty">لا توجد شبكات موثوقة بعد. أضِف الشبكة الحالية لإيقاف BlockAds عليها.</string>
     <string name="trusted_networks_paused_title">متوقف مؤقتًا على شبكة موثوقة</string>
-    <string name="trusted_networks_paused_text">تم إيقاف BlockAds مؤقتًا على "%1$s" — يستأنف تلقائيًا عند مغادرتك للشبكة.</string>
+    <string name="trusted_networks_paused_text">تم إيقاف BlockAds مؤقتًا على &quot;%1$s&quot; — يستأنف تلقائيًا عند مغادرتك للشبكة.</string>
     <string name="trusted_networks_paused_text_generic">تم إيقاف BlockAds مؤقتًا على شبكة Wi-Fi موثوقة — يستأنف عند المغادرة.</string>
     <string name="status_paused">متوقف مؤقتًا</string>
     <string name="home_paused_trusted_short">متوقف مؤقتًا على شبكة موثوقة</string>
@@ -577,4 +577,7 @@
     <string name="settings_device_owner_section_desc">إدارة قيود مالك الجهاز. مرئي فقط لأن BlockAds هو مالك الجهاز.</string>
     <string name="settings_device_owner_enforce_restrictions">قيود الجهاز</string>
     <string name="settings_device_owner_enforce_restrictions_desc">قم بالتمكين لتطبيق قيود على مستوى التطبيق (حظر أدوات المطور ، وما إلى ذلك). قم بالتعطيل لمسحها.</string>
+    <string name="https_filtering_http3_title">تصفية HTTP/3 (QUIC)</string>
+    <string name="https_filtering_http3_desc">حظر QUIC في المتصفح لفرض اتصالات قابلة للتصفية للحصول على أقصى تصفية للإعلانات. قد يتسبب في تحميل بعض الصفحات جزئياً. أوقفه إذا لم يتم تحميل الصفحات بالكامل.</string>
+    <string name="log_record_logs">تسجيل السجلات</string>
 </resources>
