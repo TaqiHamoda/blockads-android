@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Navegación sin anuncios</string>
     <string name="notification_channel_name">Servicio de bloqueo de anuncios</string>
     <string name="notification_channel_description">Se muestra cuando el bloqueador de anuncios VPN está activo</string>
@@ -540,6 +540,14 @@
     <string name="lockdown_duration_6h">6 horas</string>
     <string name="lockdown_duration_12h">12 horas</string>
     <string name="lockdown_duration_24h">24 horas</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d hora</item>
+        <item quantity="other">%1$d horas</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="other">%1$d minutos</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds está bloqueado</string>
     <string name="lockdown_screen_desc">Para modificar la configuración o desactivar el bloqueo de anuncios, debes iniciar el temporizador de enfriamiento.</string>
     <string name="lockdown_screen_cancel">Cancelar enfriamiento</string>

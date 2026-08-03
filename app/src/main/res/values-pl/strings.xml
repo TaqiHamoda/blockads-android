@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Przeglądanie bez reklam</string>
     <string name="notification_channel_name">Usługa blokowania reklam</string>
     <string name="notification_channel_description">Pokazuje, kiedy bloker reklam VPN jest aktywny</string>
@@ -540,6 +540,16 @@
     <string name="lockdown_duration_6h">6 godzin</string>
     <string name="lockdown_duration_12h">12 godzin</string>
     <string name="lockdown_duration_24h">24 godziny</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d godzina</item>
+        <item quantity="few">%1$d godziny</item>
+        <item quantity="other">%1$d godzin</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d minuta</item>
+        <item quantity="few">%1$d minuty</item>
+        <item quantity="other">%1$d minut</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds jest zablokowany</string>
     <string name="lockdown_screen_desc">Aby zmienić ustawienia lub wyłączyć blokowanie reklam, musisz uruchomić zegar oczekiwania.</string>
     <string name="lockdown_screen_cancel">Anuluj oczekiwanie</string>

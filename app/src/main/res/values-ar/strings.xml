@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="about_contact">اتصل بنا</string>
     <string name="about_description">حاجب إعلانات مجاني ومفتوح المصدر.
 لا يتم جمع البيانات. لا يوجد تتبع.</string>
@@ -556,6 +556,14 @@
     <string name="lockdown_duration_6h">6 ساعات</string>
     <string name="lockdown_duration_12h">12 ساعة</string>
     <string name="lockdown_duration_24h">24 ساعة</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d ساعة</item>
+        <item quantity="other">%1$d ساعات</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d دقيقة</item>
+        <item quantity="other">%1$d دقائق</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds مقفل</string>
     <string name="lockdown_screen_desc">لتعديل إعداداتك أو تعطيل حظر الإعلانات، يجب عليك بدء مؤقت التهدئة.</string>
     <string name="lockdown_screen_cancel">إلغاء التهدئة</string>

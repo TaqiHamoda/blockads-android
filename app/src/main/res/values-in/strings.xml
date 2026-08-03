@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Penjelajahan Bebas Iklan</string>
     <string name="notification_channel_name">Layanan Pemblokir Iklan</string>
     <string name="notification_channel_description">Ditampilkan saat pemblokir iklan VPN aktif</string>
@@ -540,6 +540,12 @@
     <string name="lockdown_duration_6h">6 jam</string>
     <string name="lockdown_duration_12h">12 jam</string>
     <string name="lockdown_duration_24h">24 jam</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d jam</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d menit</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds Terkunci</string>
     <string name="lockdown_screen_desc">Untuk mengubah pengaturan atau menonaktifkan pemblokiran iklan, Anda harus memulai waktu tunggu.</string>
     <string name="lockdown_screen_cancel">Batalkan Waktu Tunggu</string>

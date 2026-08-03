@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">広告なしのブラウジング</string>
     <string name="notification_channel_name">広告ブロッカーサービス</string>
     <string name="notification_channel_description">VPN広告ブロッカーが有効な場合に表示されます</string>
@@ -540,6 +540,12 @@
     <string name="lockdown_duration_6h">6時間</string>
     <string name="lockdown_duration_12h">12時間</string>
     <string name="lockdown_duration_24h">24時間</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d 時間</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d 分</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAdsはロックされています</string>
     <string name="lockdown_screen_desc">設定を変更したり広告ブロックを無効にしたりするには、クールダウンタイマーを開始する必要があります。</string>
     <string name="lockdown_screen_cancel">クールダウンをキャンセル</string>

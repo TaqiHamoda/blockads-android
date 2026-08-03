@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">광고 없는 브라우징</string>
     <string name="notification_channel_name">광고 차단 서비스</string>
     <string name="notification_channel_description">VPN 광고 차단기가 활성화되면 표시됩니다</string>
@@ -540,6 +540,12 @@
     <string name="lockdown_duration_6h">6시간</string>
     <string name="lockdown_duration_12h">12시간</string>
     <string name="lockdown_duration_24h">24시간</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d시간</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d분</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds가 잠겨 있습니다</string>
     <string name="lockdown_screen_desc">설정을 수정하거나 광고 차단을 해제하려면 대기 시간 타이머를 시작해야 합니다.</string>
     <string name="lockdown_screen_cancel">대기 취소</string>

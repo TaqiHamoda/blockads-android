@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Werbefreies Surfen</string>
     <string name="notification_channel_name">Werbeblocker-Dienst</string>
     <string name="notification_channel_description">Wird angezeigt, wenn der VPN-Werbeblocker aktiv ist</string>
@@ -540,6 +540,14 @@
     <string name="lockdown_duration_6h">6 Stunden</string>
     <string name="lockdown_duration_12h">12 Stunden</string>
     <string name="lockdown_duration_24h">24 Stunden</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d Stunde</item>
+        <item quantity="other">%1$d Stunden</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d Minute</item>
+        <item quantity="other">%1$d Minuten</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds ist gesperrt</string>
     <string name="lockdown_screen_desc">Um Ihre Einstellungen zu ändern oder die Werbeblockierung zu deaktivieren, müssen Sie den Abkling-Timer starten.</string>
     <string name="lockdown_screen_cancel">Abklingzeit abbrechen</string>

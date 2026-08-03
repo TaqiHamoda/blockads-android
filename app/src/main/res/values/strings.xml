@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">BlockAds</string>
     <string name="app_tagline">Ad-Free Browsing</string>
     <string name="notification_channel_name">Ad Blocker Service</string>
@@ -573,11 +573,11 @@
     <string name="lockdown_duration_6h">6 hours</string>
     <string name="lockdown_duration_12h">12 hours</string>
     <string name="lockdown_duration_24h">24 hours</string>
-    <plurals name="lockdown_duration_hours">
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
         <item quantity="one">%1$d hour</item>
         <item quantity="other">%1$d hours</item>
     </plurals>
-    <plurals name="lockdown_duration_minutes">
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
         <item quantity="one">%1$d minute</item>
         <item quantity="other">%1$d minutes</item>
     </plurals>

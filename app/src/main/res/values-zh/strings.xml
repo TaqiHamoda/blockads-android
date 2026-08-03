@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">无广告浏览</string>
     <string name="notification_channel_name">广告拦截服务</string>
     <string name="notification_channel_description">当VPN广告拦截器处于活动状态时显示</string>
@@ -539,7 +539,13 @@
     <string name="lockdown_duration_1h">1小时</string>
     <string name="lockdown_duration_6h">6小时</string>
     <string name="lockdown_duration_12h">12小时</string>
-    <string name="lockdown_duration_24h">24小时</string>
+    <string name="lockdown_duration_24h">24 小时</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d 小时</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d 分钟</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds 已锁定</string>
     <string name="lockdown_screen_desc">要修改设置或禁用广告拦截，您必须启动冷却倒计时。</string>
     <string name="lockdown_screen_cancel">取消冷却</string>

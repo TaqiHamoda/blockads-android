@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Prohlížení bez reklam</string>
     <string name="notification_channel_name">Služba blokování reklam</string>
     <string name="notification_channel_description">Zobrazuje se, když je aktivní blokování reklam VPN</string>
@@ -540,6 +540,16 @@
     <string name="lockdown_duration_6h">6 hodin</string>
     <string name="lockdown_duration_12h">12 hodin</string>
     <string name="lockdown_duration_24h">24 hodin</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d hodina</item>
+        <item quantity="few">%1$d hodiny</item>
+        <item quantity="other">%1$d hodin</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d minuta</item>
+        <item quantity="few">%1$d minuty</item>
+        <item quantity="other">%1$d minut</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds je uzamčen</string>
     <string name="lockdown_screen_desc">Chcete-li upravit nastavení nebo zakázat blokování reklam, musíte spustit časovač uklidnění.</string>
     <string name="lockdown_screen_cancel">Zrušit uklidnění</string>

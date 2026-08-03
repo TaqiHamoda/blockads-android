@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_tagline">Интернет без рекламы</string>
     <string name="notification_channel_name">Сервис блокировки рекламы</string>
     <string name="notification_channel_description">Показывается, когда VPN-блокировщик рекламы активен</string>
@@ -540,6 +540,18 @@
     <string name="lockdown_duration_6h">6 часов</string>
     <string name="lockdown_duration_12h">12 часов</string>
     <string name="lockdown_duration_24h">24 часа</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d час</item>
+        <item quantity="few">%1$d часа</item>
+        <item quantity="many">%1$d часов</item>
+        <item quantity="other">%1$d часа</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d минута</item>
+        <item quantity="few">%1$d минуты</item>
+        <item quantity="many">%1$d минут</item>
+        <item quantity="other">%1$d минуты</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds заблокирован</string>
     <string name="lockdown_screen_desc">Чтобы изменить настройки или отключить блокировку рекламы, необходимо запустить таймер ожидания.</string>
     <string name="lockdown_screen_cancel">Отменить ожидание</string>
