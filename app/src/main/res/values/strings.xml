@@ -592,5 +592,5 @@
     <string name="settings_device_owner_section_title">Device Owner Control</string>
     <string name="settings_device_owner_section_desc">Manage Device Owner restrictions. Only visible because BlockAds is a Device Owner.</string>
     <string name="settings_device_owner_enforce_restrictions">Device Restrictions</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Enable to apply app-level restrictions (prevent uninstallation, etc). Disable to clear them.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Enable to apply app-level restrictions (block developer tools, etc). Disable to clear them.</string>
 </resources>

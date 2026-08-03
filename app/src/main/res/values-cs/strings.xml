@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">Ovládání vlastníka zařízení</string>
     <string name="settings_device_owner_section_desc">Správa omezení vlastníka zařízení. Viditelné pouze proto, že BlockAds je vlastník zařízení.</string>
     <string name="settings_device_owner_enforce_restrictions">Omezení zařízení</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Povolit pro uplatnění omezení na úrovni aplikace (zabrání odinstalaci atd.). Zakázat pro jejich vymazání.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Povolit pro uplatnění omezení na úrovni aplikace (blokování vývojářských nástrojů atd.). Zakázat pro jejich vymazání.</string>
 </resources>

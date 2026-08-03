@@ -568,5 +568,5 @@
     <string name="settings_device_owner_section_title">التحكم في مالك الجهاز</string>
     <string name="settings_device_owner_section_desc">إدارة قيود مالك الجهاز. مرئي فقط لأن BlockAds هو مالك الجهاز.</string>
     <string name="settings_device_owner_enforce_restrictions">قيود الجهاز</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">قم بالتمكين لتطبيق قيود على مستوى التطبيق (منع إلغاء التثبيت ، وما إلى ذلك). قم بالتعطيل لمسحها.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">قم بالتمكين لتطبيق قيود على مستوى التطبيق (حظر أدوات المطور ، وما إلى ذلك). قم بالتعطيل لمسحها.</string>
 </resources>

@@ -30,7 +30,7 @@ fun LockdownScreen(
     // Prevent back navigation
     BackHandler(enabled = true) {}
 
-    var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var totalElapsedMs by remember(cooldownStart) { mutableLongStateOf(0L) }
 
     // LaunchedEffect ticker running every 1 second
     LaunchedEffect(cooldownStart) {
@@ -54,7 +54,7 @@ fun LockdownScreen(
             var ticksSinceSave = 0
             
             while (true) {
-                currentTime = System.currentTimeMillis()
+                val currentTime = System.currentTimeMillis()
                 val currentRealtime = android.os.SystemClock.elapsedRealtime()
                 
                 // Clock tampering detection
@@ -75,13 +75,14 @@ fun LockdownScreen(
                 
                 ticksSinceSave++
                 if (ticksSinceSave >= 10) {
-                    appPrefs.setLastActiveTimestamp(currentTime)
-                    appPrefs.setLastActiveRealtime(currentRealtime)
+                    appPrefs.setLastActiveBaselines(currentTime, currentRealtime)
                     ticksSinceSave = 0
                 }
 
                 val elapsedBeforeBaseline = (initialWall - cooldownStart).coerceAtLeast(0L)
                 val totalElapsed = elapsedBeforeBaseline + totalMonotonicElapsed
+                totalElapsedMs = totalElapsed
+
                 if (totalElapsed >= duration) {
                     onUnlockComplete()
                     break
@@ -91,7 +92,7 @@ fun LockdownScreen(
         }
     }
     
-    val remainingMs = if (cooldownStart > 0L) duration - (currentTime - cooldownStart) else duration
+    val remainingMs = if (cooldownStart > 0L) (duration - totalElapsedMs).coerceAtLeast(0L) else duration
     val secondsLeft = (remainingMs / 1000).coerceAtLeast(0)
     
     val isCountingDown = cooldownStart > 0L

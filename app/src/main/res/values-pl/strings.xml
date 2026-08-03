@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">Kontrola właściciela urządzenia</string>
     <string name="settings_device_owner_section_desc">Zarządzaj ograniczeniami właściciela urządzenia. Widoczne tylko dlatego, że BlockAds jest właścicielem urządzenia.</string>
     <string name="settings_device_owner_enforce_restrictions">Ograniczenia urządzenia</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Włącz, aby zastosować ograniczenia na poziomie aplikacji (zapobieganie odinstalowaniu itp.). Wyłącz, aby je wyczyścić.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Włącz, aby zastosować ograniczenia na poziomie aplikacji (blokowanie narzędzi deweloperskich itp.). Wyłącz, aby je wyczyścić.</string>
 </resources>

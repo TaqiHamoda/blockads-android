@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">Kiểm soát chủ sở hữu thiết bị</string>
     <string name="settings_device_owner_section_desc">Quản lý các hạn chế của Chủ sở hữu thiết bị. Chỉ hiển thị vì BlockAds là Chủ sở hữu thiết bị.</string>
     <string name="settings_device_owner_enforce_restrictions">Giới hạn thiết bị</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Bật để áp dụng các hạn chế cấp ứng dụng (ngăn gỡ cài đặt, v.v.). Tắt để xóa chúng.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Bật để áp dụng các hạn chế cấp ứng dụng (chặn công cụ nhà phát triển, v.v.). Tắt để xóa chúng.</string>
 </resources>

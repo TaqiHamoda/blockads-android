@@ -80,9 +80,8 @@ fun BlockAdsApp(
                 duration = duration,
                 onStartCooldown = { timestamp ->
                     coroutineScope.launch { 
+                        appPrefs.setLastActiveBaselines(timestamp, android.os.SystemClock.elapsedRealtime())
                         appPrefs.setCooldownStartTimestamp(timestamp) 
-                        appPrefs.setLastActiveTimestamp(timestamp)
-                        appPrefs.setLastActiveRealtime(android.os.SystemClock.elapsedRealtime())
                     }
                 },
                 onCancelCooldown = {

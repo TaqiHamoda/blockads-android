@@ -489,6 +489,7 @@ class SettingsViewModel(
 
     fun setRestrictionsEnforced(enforced: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
+            appPrefs.setDeviceOwnerRestrictionsEnabled(enforced)
             if (enforced) {
                 deviceOwnerManager.enforceRestrictions()
             } else {
@@ -497,5 +498,6 @@ class SettingsViewModel(
             _restrictionsEnforced.value = deviceOwnerManager.areRestrictionsEnforced()
         }
     }
+
 
 }

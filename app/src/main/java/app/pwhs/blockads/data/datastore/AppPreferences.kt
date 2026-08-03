@@ -75,6 +75,8 @@ class AppPreferences(private val context: Context) {
         private val KEY_COOLDOWN_START_TIMESTAMP = longPreferencesKey("cooldown_start_timestamp")
         private val KEY_LAST_ACTIVE_TIMESTAMP = longPreferencesKey("last_active_timestamp")
         private val KEY_LAST_ACTIVE_REALTIME = longPreferencesKey("last_active_realtime")
+        private val KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED =
+            booleanPreferencesKey("device_owner_restrictions_enabled")
 
         const val ROUTING_MODE_DIRECT = "direct"
         const val ROUTING_MODE_WIREGUARD = "wireguard"
@@ -185,6 +187,10 @@ class AppPreferences(private val context: Context) {
 
     val lastActiveRealtime: Flow<Long> = context.dataStore.data.map { prefs ->
         prefs[KEY_LAST_ACTIVE_REALTIME] ?: 0L
+    }
+
+    val deviceOwnerRestrictionsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED] ?: true
     }
 
     val autoReconnect: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -426,6 +432,12 @@ class AppPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setDeviceOwnerRestrictionsEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED] = enabled
+        }
+    }
+
     suspend fun setLockdownDuration(ms: Long) {
         val validMs = if (ms in ALLOWED_LOCKDOWN_DURATIONS) ms else DEFAULT_LOCKDOWN_DURATION
         context.dataStore.edit { prefs ->
@@ -448,6 +460,13 @@ class AppPreferences(private val context: Context) {
     suspend fun setLastActiveRealtime(timestamp: Long) {
         context.dataStore.edit { prefs ->
             prefs[KEY_LAST_ACTIVE_REALTIME] = timestamp
+        }
+    }
+
+    suspend fun setLastActiveBaselines(wallTimestamp: Long, realtimeTimestamp: Long) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_LAST_ACTIVE_TIMESTAMP] = wallTimestamp
+            prefs[KEY_LAST_ACTIVE_REALTIME] = realtimeTimestamp
         }
     }
 

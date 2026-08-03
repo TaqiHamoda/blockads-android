@@ -573,5 +573,5 @@ Desteklenen formatlar:
     <string name="settings_device_owner_section_title">Cihaz Sahibi Kontrolü</string>
     <string name="settings_device_owner_section_desc">Cihaz Sahibi kısıtlamalarını yönetin. Sadece BlockAds Cihaz Sahibi olduğu için görünür.</string>
     <string name="settings_device_owner_enforce_restrictions">Cihaz Kısıtlamaları</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Uygulama düzeyinde kısıtlamalar uygulamak için etkinleştirin (kaldırmayı önleme vb.). Kısıtlamaları kaldırmak için devre dışı bırakın.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Uygulama düzeyinde kısıtlamalar uygulamak için etkinleştirin (geliştirici araçlarını engelleme vb.). Kısıtlamaları kaldırmak için devre dışı bırakın.</string>
 </resources>

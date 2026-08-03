@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">Контроль власника пристрою</string>
     <string name="settings_device_owner_section_desc">Керування обмеженнями власника пристрою. Видимо лише тому, що BlockAds є власником пристрою.</string>
     <string name="settings_device_owner_enforce_restrictions">Обмеження пристрою</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Увімкніть, щоб застосувати обмеження на рівні програми (запобігти видаленню тощо). Вимкніть, щоб очистити їх.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Увімкніть, щоб застосувати обмеження на рівні програми (блокувати інструменти розробника тощо). Вимкніть, щоб очистити їх.</string>
 </resources>

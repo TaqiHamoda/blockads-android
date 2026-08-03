@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">Kontrol Pemilik Perangkat</string>
     <string name="settings_device_owner_section_desc">Kelola batasan Pemilik Perangkat. Hanya terlihat karena BlockAds adalah Pemilik Perangkat.</string>
     <string name="settings_device_owner_enforce_restrictions">Batasan Perangkat</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">Aktifkan untuk menerapkan batasan tingkat aplikasi (mencegah pencopotan pemasangan, dll). Nonaktifkan untuk menghapusnya.</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Aktifkan untuk menerapkan batasan tingkat aplikasi (memblokir alat pengembang, dll). Nonaktifkan untuk menghapusnya.</string>
 </resources>

@@ -552,5 +552,5 @@
     <string name="settings_device_owner_section_title">デバイス所有者コントロール</string>
     <string name="settings_device_owner_section_desc">デバイス所有者の制限を管理します。BlockAdsがデバイス所有者であるため、表示されます。</string>
     <string name="settings_device_owner_enforce_restrictions">デバイス制限</string>
-    <string name="settings_device_owner_enforce_restrictions_desc">アプリレベルの制限（アンインストールの防止など）を適用するには有効にします。クリアするには無効にします。</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">アプリレベルの制限（開発者ツールのブロックなど）を適用するには有効にします。クリアするには無効にします。</string>
 </resources>
