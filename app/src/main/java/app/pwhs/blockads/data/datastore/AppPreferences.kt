@@ -149,6 +149,17 @@ class AppPreferences(private val context: Context) {
         const val DEFAULT_FALLBACK_DNS = "94.140.14.14"
         const val DEFAULT_DNS_PROTOCOL = "PLAIN"
         const val DEFAULT_DOH_URL = "https://dns.quad9.net/dns-query"
+        const val DEFAULT_LOCKDOWN_DURATION = 300000L
+        val ALLOWED_LOCKDOWN_DURATIONS = setOf(
+            60000L,
+            300000L,
+            600000L,
+            1800000L,
+            3600000L,
+            21600000L,
+            43200000L,
+            86400000L
+        )
     }
 
     val vpnEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
@@ -160,7 +171,8 @@ class AppPreferences(private val context: Context) {
     }
 
     val lockdownDuration: Flow<Long> = context.dataStore.data.map { prefs ->
-        prefs[KEY_LOCKDOWN_DURATION] ?: 300000L
+        val duration = prefs[KEY_LOCKDOWN_DURATION] ?: DEFAULT_LOCKDOWN_DURATION
+        if (duration in ALLOWED_LOCKDOWN_DURATIONS) duration else DEFAULT_LOCKDOWN_DURATION
     }
 
     val cooldownStartTimestamp: Flow<Long> = context.dataStore.data.map { prefs ->
@@ -415,8 +427,9 @@ class AppPreferences(private val context: Context) {
     }
 
     suspend fun setLockdownDuration(ms: Long) {
+        val validMs = if (ms in ALLOWED_LOCKDOWN_DURATIONS) ms else DEFAULT_LOCKDOWN_DURATION
         context.dataStore.edit { prefs ->
-            prefs[KEY_LOCKDOWN_DURATION] = ms
+            prefs[KEY_LOCKDOWN_DURATION] = validMs
         }
     }
 

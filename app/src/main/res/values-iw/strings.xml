@@ -532,11 +532,11 @@
     <string name="settings_lockdown_mode_desc">כאשר מופעל, אינך יכול לכבות את ה-VPN או לגשת להגדרות מבלי להמתין לסיום טיימר הצינון.</string>
     <string name="settings_lockdown_duration_title">משך זמן צינון</string>
     <string name="settings_lockdown_duration_desc">הזמן שעליך להמתין כדי לבטל את נעילת האפליקציה</string>
-    <string name="lockdown_duration_1m">דקה 1</string>
+    <string name="lockdown_duration_1m">1 דקה</string>
     <string name="lockdown_duration_5m">5 דקות</string>
     <string name="lockdown_duration_10m">10 דקות</string>
     <string name="lockdown_duration_30m">30 דקות</string>
-    <string name="lockdown_duration_1h">שעה 1</string>
+    <string name="lockdown_duration_1h">1 שעה</string>
     <string name="lockdown_duration_6h">6 שעות</string>
     <string name="lockdown_duration_12h">12 שעות</string>
     <string name="lockdown_duration_24h">24 שעות</string>

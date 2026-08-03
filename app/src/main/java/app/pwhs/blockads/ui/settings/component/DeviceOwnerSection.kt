@@ -38,6 +38,7 @@ fun DeviceOwnerSection(
                 title = stringResource(R.string.settings_device_owner_enforce_restrictions),
                 subtitle = stringResource(R.string.settings_device_owner_enforce_restrictions_desc),
                 isChecked = restrictionsEnforced,
+                enabled = !lockdownEnabled,
                 modifier = Modifier.alpha(if (lockdownEnabled) 0.5f else 1f),
                 onCheckedChange = {
                     if (!lockdownEnabled) onSetRestrictionsEnforced(it)

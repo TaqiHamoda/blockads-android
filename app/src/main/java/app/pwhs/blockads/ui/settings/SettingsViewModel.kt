@@ -494,7 +494,7 @@ class SettingsViewModel(
             } else {
                 deviceOwnerManager.clearRestrictions()
             }
-            _restrictionsEnforced.value = enforced
+            _restrictionsEnforced.value = deviceOwnerManager.areRestrictionsEnforced()
         }
     }
 

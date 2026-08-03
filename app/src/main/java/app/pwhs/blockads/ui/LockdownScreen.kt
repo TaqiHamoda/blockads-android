@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,8 +31,6 @@ fun LockdownScreen(
     BackHandler(enabled = true) {}
 
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
-    var lastActiveTime by remember { mutableStateOf(System.currentTimeMillis()) }
-    var lastActiveRealtime by remember { mutableStateOf(android.os.SystemClock.elapsedRealtime()) }
 
     // LaunchedEffect ticker running every 1 second
     LaunchedEffect(cooldownStart) {
@@ -43,18 +42,15 @@ fun LockdownScreen(
             val initialReal = android.os.SystemClock.elapsedRealtime()
             
             if (lastPersistedTime > 0L && lastPersistedRealtime > 0L) {
-                if (initialReal >= lastPersistedRealtime) {
-                    val wallDiff = initialWall - lastPersistedTime
-                    val realDiff = initialReal - lastPersistedRealtime
-                    if (initialWall < lastPersistedTime || (wallDiff - realDiff > 5 * 60 * 1000)) {
-                        onTimeTamperingDetected()
-                        return@LaunchedEffect
-                    }
+                val wallDiff = initialWall - lastPersistedTime
+                val realDiff = initialReal - lastPersistedRealtime
+                if (initialWall < lastPersistedTime || initialReal < lastPersistedRealtime || (wallDiff - realDiff > 5 * 60 * 1000)) {
+                    onTimeTamperingDetected()
+                    return@LaunchedEffect
                 }
             }
             
-            lastActiveTime = initialWall
-            lastActiveRealtime = initialReal
+            var lastWallTime = initialWall
             var ticksSinceSave = 0
             
             while (true) {
@@ -62,21 +58,20 @@ fun LockdownScreen(
                 val currentRealtime = android.os.SystemClock.elapsedRealtime()
                 
                 // Clock tampering detection
-                if (currentTime < lastActiveTime) {
+                if (currentTime < lastWallTime) {
                     onTimeTamperingDetected()
                     break
                 }
                 
-                val wallClockElapsed = currentTime - lastActiveTime
-                val monotonicElapsed = currentRealtime - lastActiveRealtime
+                val totalWallElapsed = currentTime - initialWall
+                val totalMonotonicElapsed = currentRealtime - initialReal
                 
-                if (wallClockElapsed - monotonicElapsed > 5 * 60 * 1000) {
+                if (totalWallElapsed - totalMonotonicElapsed > 5 * 60 * 1000) {
                      onTimeTamperingDetected()
                      break
                 }
                 
-                lastActiveTime = currentTime
-                lastActiveRealtime = currentRealtime
+                lastWallTime = currentTime
                 
                 ticksSinceSave++
                 if (ticksSinceSave >= 10) {
@@ -85,8 +80,9 @@ fun LockdownScreen(
                     ticksSinceSave = 0
                 }
 
-                val elapsed = currentTime - cooldownStart
-                if (elapsed >= duration) {
+                val elapsedBeforeBaseline = (initialWall - cooldownStart).coerceAtLeast(0L)
+                val totalElapsed = elapsedBeforeBaseline + totalMonotonicElapsed
+                if (totalElapsed >= duration) {
                     onUnlockComplete()
                     break
                 }
@@ -183,12 +179,12 @@ fun LockdownScreen(
                     color = MaterialTheme.colorScheme.error
                 )
             } else {
-                val durationMins = duration / (60 * 1000)
+                val durationMins = (duration / (60 * 1000)).toInt()
                 val durationText = if (durationMins >= 60) {
                     val h = durationMins / 60
-                    "$h hour" + (if (h > 1) "s" else "")
+                    pluralStringResource(R.plurals.lockdown_duration_hours, h, h)
                 } else {
-                    "$durationMins minutes"
+                    pluralStringResource(R.plurals.lockdown_duration_minutes, durationMins, durationMins)
                 }
 
                 Text(

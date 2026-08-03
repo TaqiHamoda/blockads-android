@@ -12,21 +12,44 @@ class DeviceOwnerManager(private val context: Context) {
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     private val componentName = ComponentName(context, AdBlockDeviceAdminReceiver::class.java)
 
+    companion object {
+        val REQUIRED_RESTRICTIONS = listOf(
+            UserManager.DISALLOW_CONFIG_VPN,
+            UserManager.DISALLOW_DEBUGGING_FEATURES
+        )
+    }
+
     fun isDeviceOwner(): Boolean {
         return devicePolicyManager.isDeviceOwnerApp(context.packageName)
     }
 
     fun areRestrictionsEnforced(): Boolean {
         if (!isDeviceOwner()) return false
-        val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
-        return userManager.hasUserRestriction(UserManager.DISALLOW_UNINSTALL_APPS)
+
+        val alwaysOnVpnPackage = try {
+            devicePolicyManager.getAlwaysOnVpnPackage(componentName)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to get always-on VPN package")
+            null
+        }
+        val isAlwaysOnVpnSet = alwaysOnVpnPackage == context.packageName
+
+        val userManager = context.getSystemService(Context.USER_SERVICE) as? UserManager
+            ?: return false
+
+        val allRestrictionsSet = REQUIRED_RESTRICTIONS.all { restriction ->
+            userManager.hasUserRestriction(restriction)
+        }
+
+        return isAlwaysOnVpnSet && allRestrictionsSet
     }
 
-    fun enforceRestrictions() {
-        if (!isDeviceOwner()) return
+    fun enforceRestrictions(): Boolean {
+        if (!isDeviceOwner()) return false
 
         Timber.d("Enforcing Device Owner restrictions")
-        
+        var success = true
+
         // Set as always-on VPN FIRST before applying DISALLOW_CONFIG_VPN
         // If we apply the restriction first, the OS immediately kills the active VPN
         try {
@@ -37,23 +60,27 @@ class DeviceOwnerManager(private val context: Context) {
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to set always-on VPN via DPM")
+            success = false
         }
 
-        val restrictions = listOf(
-            UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_DEBUGGING_FEATURES
-        )
-
-        for (restriction in restrictions) {
-            devicePolicyManager.addUserRestriction(componentName, restriction)
+        for (restriction in REQUIRED_RESTRICTIONS) {
+            try {
+                devicePolicyManager.addUserRestriction(componentName, restriction)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to add restriction $restriction via DPM")
+                success = false
+            }
         }
+
+        return success
     }
 
-    fun clearRestrictions() {
-        if (!isDeviceOwner()) return
+    fun clearRestrictions(): Boolean {
+        if (!isDeviceOwner()) return false
 
         Timber.d("Clearing Device Owner restrictions")
-        
+        var success = true
+
         try {
             devicePolicyManager.setAlwaysOnVpnPackage(
                 componentName,
@@ -62,16 +89,19 @@ class DeviceOwnerManager(private val context: Context) {
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to clear always-on VPN via DPM")
+            success = false
         }
 
-        val restrictions = listOf(
-            UserManager.DISALLOW_CONFIG_VPN,
-            UserManager.DISALLOW_DEBUGGING_FEATURES
-        )
-
-        for (restriction in restrictions) {
-            devicePolicyManager.clearUserRestriction(componentName, restriction)
+        for (restriction in REQUIRED_RESTRICTIONS) {
+            try {
+                devicePolicyManager.clearUserRestriction(componentName, restriction)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to clear restriction $restriction via DPM")
+                success = false
+            }
         }
+
+        return success
     }
 
 }

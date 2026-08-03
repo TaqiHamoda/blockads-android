@@ -573,6 +573,14 @@
     <string name="lockdown_duration_6h">6 hours</string>
     <string name="lockdown_duration_12h">12 hours</string>
     <string name="lockdown_duration_24h">24 hours</string>
+    <plurals name="lockdown_duration_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
     <string name="lockdown_screen_title">BlockAds is Locked</string>
     <string name="lockdown_screen_desc">To modify your settings or disable ad blocking, you must initiate the cooldown timer.</string>
     <string name="lockdown_screen_cancel">Cancel Cooldown</string>
