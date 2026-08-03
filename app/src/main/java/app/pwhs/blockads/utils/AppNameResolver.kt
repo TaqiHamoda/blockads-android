@@ -39,7 +39,8 @@ class AppNameResolver(private val context: Context) {
     // Populated only when [startSnapshotter] is active (Root Proxy mode).
     // DNS query lookups read this map without blocking — no inline shell.
     @Volatile private var procNetSnapshot: Map<Int, Int> = emptyMap()
-    private var snapshotJob: Job? = null
+
+    @Volatile private var snapshotJob: Job? = null
 
     /**
      * Resolved app identity containing both display name and package name.
@@ -141,23 +142,37 @@ class AppNameResolver(private val context: Context) {
     }
 
     /**
-     * Look up /proc/net/udp and /proc/net/udp6 to find the UID owning the given port.
-     * Used on API < 29 and on Android 10+ in Root Proxy mode.
+     * Look up the UID owning the given port. Runs inline on every DNS query,
+     * so nothing blocking is allowed here.
+     *
+     * On API 29+ the only source consulted is [procNetSnapshot], which
+     * [startSnapshotter] refreshes in the background. The two paths that used
+     * to follow it are gone from the hot path, because measurement on a rooted
+     * Android 13 device showed what they actually cost per query:
+     *
+     *  - `/proc/net/udp{,6}` direct reads: not merely SELinux-narrowed as the
+     *    old comment assumed, but flat `EACCES`. Two full-file parses per
+     *    query to guarantee a miss (~7 queries/sec sustained in logcat).
+     *  - the libsu root read: a blocking shell command per query. libsu runs
+     *    everything on one shared shell, so DNS resolution serialised behind
+     *    it — and behind every iptables call too. That is issue #130's
+     *    failure mode, which the snapshotter was supposed to have fixed; it
+     *    didn't, because a 100ms snapshot interval misses DNS sockets that
+     *    live for a few milliseconds, so queries kept falling through.
+     *
+     * The cost of dropping them is attribution, not filtering: a query whose
+     * socket the snapshot didn't catch is logged as unresolved instead of
+     * named. Blocking decisions never depended on this. API < 29 keeps the
+     * direct reads, where they work without root and without SELinux denial.
      */
     private fun findUidFromProcNet(port: Int): Int {
-        // Hot path (Root Proxy mode): read from the background snapshot.
         procNetSnapshot[port]?.let { return it }
 
-        val hexPort = String.format("%04X", port)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return -1
 
-        // Unprivileged read fallback (works for own app's sockets and on older Android)
+        val hexPort = String.format("%04X", port)
         findUidInProcFile("/proc/net/udp", hexPort)?.let { return it }
         findUidInProcFile("/proc/net/udp6", hexPort)?.let { return it }
-
-        // Root-privileged read: on Android 10+, SELinux restricts /proc/net/udp
-        // to only show the app's own sockets. In Root Proxy mode the snapshotter
-        // already covers this path; this branch is the slow-path safety net.
-        findUidFromProcNetRoot(hexPort)?.let { return it }
 
         return -1
     }
@@ -191,41 +206,6 @@ class AppNameResolver(private val context: Context) {
             }
         }
         return map
-    }
-
-    /**
-     * Read /proc/net/udp and /proc/net/udp6 via root shell (libsu).
-     * This bypasses SELinux restrictions on Android 10+ that prevent
-     * normal apps from seeing other apps' socket entries.
-     */
-    private fun findUidFromProcNetRoot(hexPort: String): Int? {
-        try {
-            val result = com.topjohnwu.superuser.Shell.cmd(
-                "cat /proc/net/udp /proc/net/udp6 2>/dev/null"
-            ).exec()
-            if (!result.isSuccess) return null
-
-            for (line in result.out) {
-                try {
-                    val parts = line.trim().split("\\s+".toRegex())
-                    if (parts.size >= 8) {
-                        val localAddress = parts[1]
-                        val colonIndex = localAddress.lastIndexOf(':')
-                        if (colonIndex >= 0) {
-                            val localPort = localAddress.substring(colonIndex + 1)
-                            if (localPort.equals(hexPort, ignoreCase = true)) {
-                                return parts[7].toIntOrNull()
-                            }
-                        }
-                    }
-                } catch (_: Exception) {
-                    // Skip malformed lines
-                }
-            }
-        } catch (e: Exception) {
-            Timber.d("Root /proc/net lookup failed: ${e.message}")
-        }
-        return null
     }
 
     private fun findUidInProcFile(path: String, hexPort: String): Int? {

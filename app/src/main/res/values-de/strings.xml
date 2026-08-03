@@ -520,7 +520,7 @@
     <string name="trusted_networks_list_header">Vertrauenswürdige WLANs</string>
     <string name="trusted_networks_empty">Noch keine vertrauenswürdigen Netzwerke. Füge dein aktuelles hinzu, um BlockAds dort zu pausieren.</string>
     <string name="trusted_networks_paused_title">In vertrauenswürdigem Netzwerk pausiert</string>
-    <string name="trusted_networks_paused_text">BlockAds ist in "%1$s" pausiert – wird beim Verlassen automatisch fortgesetzt.</string>
+    <string name="trusted_networks_paused_text">BlockAds ist in &quot;%1$s&quot; pausiert – wird beim Verlassen automatisch fortgesetzt.</string>
     <string name="trusted_networks_paused_text_generic">BlockAds ist in einem vertrauenswürdigen WLAN pausiert – wird beim Verlassen fortgesetzt.</string>
     <string name="status_paused">Pausiert</string>
     <string name="home_paused_trusted_short">Pausiert in vertrauenswürdigem Netzwerk</string>
@@ -553,4 +553,7 @@
     <string name="settings_device_owner_section_desc">Gerätebesitzereinschränkungen verwalten. Nur sichtbar, da BlockAds ein Gerätebesitzer ist.</string>
     <string name="settings_device_owner_enforce_restrictions">Geräteeinschränkungen</string>
     <string name="settings_device_owner_enforce_restrictions_desc">Aktivieren, um Einschränkungen auf App-Ebene anzuwenden (Entwicklertools blockieren usw.). Deaktivieren, um sie zu löschen.</string>
+    <string name="https_filtering_http3_title">HTTP/3 (QUIC) filtern</string>
+    <string name="https_filtering_http3_desc">Browser-QUIC blockieren, um filterbare Verbindungen für maximale Werbefilterung zu erzwingen. Kann dazu führen, dass einige Seiten nur teilweise geladen werden. Deaktivieren Sie dies, wenn Seiten nicht vollständig geladen werden.</string>
+    <string name="log_record_logs">Protokolle aufzeichnen</string>
 </resources>

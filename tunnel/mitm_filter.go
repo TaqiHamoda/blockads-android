@@ -1,6 +1,8 @@
 package tunnel
 
 import (
+	"bufio"
+	"os"
 	"strings"
 	"sync"
 )
@@ -36,6 +38,15 @@ type MitmFilter struct {
 	// should never be MITM'd. Stored with leading dot so the suffix
 	// match works the same way as the hardcoded list.
 	extraPassthroughSuffixes []string
+
+	// blacklistPath, when non-empty, is the file the auto-blacklist is
+	// persisted to (one domain per line). Persisting matters: a
+	// cert-pinned or EV domain is discovered by a failed/skip probe, and
+	// without persistence that probe (and its user-visible breakage)
+	// repeats on every app launch. Guarded by blacklistFileMu, not mu,
+	// so disk writes never block interception decisions.
+	blacklistPath   string
+	blacklistFileMu sync.Mutex
 }
 
 // sniSensitiveKeywords — if a domain contains any of these, NEVER intercept.
@@ -223,13 +234,77 @@ func (f *MitmFilter) IsInterceptionAllowed(host string) bool {
 }
 
 // BlacklistDomain permanently adds a domain to the passthrough cache.
-// Called when a TLS handshake fails (cert pinning detected).
+// Called when a TLS handshake fails (cert pinning detected) or when a
+// proactive probe finds an EV / mutual-TLS endpoint. The entry is also
+// appended to the persistent blacklist file (if configured) so the
+// decision survives restarts.
 func (f *MitmFilter) BlacklistDomain(host string) {
 	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return
+	}
+
 	f.mu.Lock()
+	alreadyKnown := f.permanentBlacklist[host]
 	f.permanentBlacklist[host] = true
+	path := f.blacklistPath
 	f.mu.Unlock()
-	logf("MITM Filter: auto-blacklisted '%s' (cert pinning detected)", host)
+
+	if alreadyKnown {
+		return // already recorded — don't log or rewrite the file again
+	}
+	logf("MITM Filter: auto-blacklisted '%s' (pinning/EV/mTLS detected)", host)
+
+	if path != "" {
+		f.appendBlacklistLine(path, host)
+	}
+}
+
+// LoadPersistentBlacklist points the filter at a file used to remember
+// auto-blacklisted domains across restarts, loading any existing entries
+// immediately. Call once, right after the filter is created. A missing
+// file is fine (first run) — the path is still recorded so future
+// BlacklistDomain calls create and append to it.
+func (f *MitmFilter) LoadPersistentBlacklist(path string) {
+	loaded := 0
+	if file, err := os.Open(path); err == nil {
+		sc := bufio.NewScanner(file)
+		f.mu.Lock()
+		for sc.Scan() {
+			line := strings.ToLower(strings.TrimSpace(sc.Text()))
+			if line == "" || line[0] == '#' {
+				continue
+			}
+			f.permanentBlacklist[line] = true
+			loaded++
+		}
+		f.mu.Unlock()
+		file.Close()
+	}
+
+	f.mu.Lock()
+	f.blacklistPath = path
+	f.mu.Unlock()
+	logf("MITM Filter: persistent blacklist at %s (%d entries loaded)", path, loaded)
+}
+
+// appendBlacklistLine appends one domain to the persistent blacklist
+// file, creating it if needed. Best-effort: a write failure is logged
+// but never blocks filtering (the in-memory set is authoritative for
+// the current session).
+func (f *MitmFilter) appendBlacklistLine(path, host string) {
+	f.blacklistFileMu.Lock()
+	defer f.blacklistFileMu.Unlock()
+
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		logf("MITM Filter: WARNING — cannot persist blacklist entry '%s': %v", host, err)
+		return
+	}
+	defer file.Close()
+	if _, err := file.WriteString(host + "\n"); err != nil {
+		logf("MITM Filter: WARNING — failed writing blacklist entry '%s': %v", host, err)
+	}
 }
 
 // GetBlacklistCount returns the number of auto-blacklisted domains.

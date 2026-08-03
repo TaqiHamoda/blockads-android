@@ -59,6 +59,16 @@ type AppResolver interface {
 	ResolveApp(sourcePort int, sourceIP []byte, destIP []byte, destPort int) string
 }
 
+// AppUidResolver maps an Android UID → package name (Kotlin-side, via
+// PackageManager.getPackagesForUid). The UID comes from
+// getConnectionOwnerUid. Unlike AppResolver it takes only an int (no
+// []byte), so it is safe to call from the concurrent full-tunnel flow hot
+// path — passing Go []byte to the gomobile JNI there panics under Go's
+// cgocheck ("Go pointer to unpinned Go pointer").
+type AppUidResolver interface {
+	PackageForUid(uid int) string
+}
+
 // SocketProtector is the interface for protecting sockets from VPN routing loop.
 // Implemented in Kotlin via VpnService.protect().
 type SocketProtector interface {
@@ -80,6 +90,7 @@ type Engine struct {
 	domainChecker   DomainChecker
 	firewallChecker FirewallChecker
 	appResolver     AppResolver
+	appUidResolver  AppUidResolver
 
 	adTries   []*MmapTrie
 	adTrieIDs []string
@@ -111,11 +122,27 @@ type Engine struct {
 	tcpStackPipe atomic.Pointer[packetPipe]
 	useTcpStack  atomic.Bool
 
+	// connLogEnabled mirrors the app's "record logs" preference. Connection
+	// logging resolves the owning app per flow, which costs two binder round
+	// trips (getConnectionOwnerUid + getPackagesForUid) — far too expensive
+	// to pay when the user isn't recording logs at all. Checked before any
+	// resolution work; see logConnection.
+	connLogEnabled atomic.Bool
+
+	// quicDrop: when true, browser QUIC (UDP 443) is dropped to force
+	// HTTP/3 traffic onto TCP TLS where the MITM can filter it. This gives
+	// maximum in-page filtering coverage but makes some sites load
+	// partially (browsers retry QUIC before falling back). When false
+	// (default), QUIC is relayed so pages load fully/smoothly; DNS-level
+	// ad-blocking still applies. Toggled from the UI via SetFilterHttp3.
+	quicDrop atomic.Bool
+
 	// Stack-mode MITM state (Phase D). When both are non-nil, the stack
 	// uses the MITM TCP handler; otherwise the Phase C direct-dial
 	// passthrough handler is used.
 	stackCertMgr    *CertManager
 	stackMitmFilter *MitmFilter
+	certDir         string // persistent dir (for CA + goroutine-dump diagnostics)
 
 	// UID resolver — supplied by Kotlin. When nil, flow-level UID lookup
 	// falls back to UIDUnknown. Stored on the engine so both the stack
@@ -126,6 +153,11 @@ type Engine struct {
 	// Handlers that dial outbound (direct flows, resolver fallbacks)
 	// use it to ensure the socket bypasses the VPN.
 	protectFn func(fd int) bool
+
+	// fullTunnelDone is created by StartFull and closed by Stop to unblock
+	// the full-network engine loop. Nil in the legacy DNS-only / WireGuard
+	// modes (StartFull is a separate, isolated data path — see fulltunnel.go).
+	fullTunnelDone chan struct{}
 
 	// Standalone Servers
 	standaloneUdp *dns.Server
@@ -279,10 +311,28 @@ func (e *Engine) SetAppResolver(resolver AppResolver) {
 	e.appResolver = resolver
 }
 
+// SetAppUidResolver sets the Kotlin-side UID→package resolver used for
+// full-tunnel per-app DNS attribution and connection logging.
+func (e *Engine) SetAppUidResolver(resolver AppUidResolver) {
+	e.appUidResolver = resolver
+}
+
 // SetLogCallback sets the callback for DNS query events.
 func (e *Engine) SetLogCallback(cb LogCallback) {
 	e.logCallback = cb
 }
+
+// SetConnLogEnabled mirrors the app's "record logs" preference into the
+// engine. Connection logging costs two binder round trips per flow to
+// resolve the owning app, so it must be off whenever the user isn't
+// recording logs. Safe to call at any time; takes effect for new flows.
+func (e *Engine) SetConnLogEnabled(enabled bool) {
+	e.connLogEnabled.Store(enabled)
+	logf("SetConnLogEnabled: connection logging = %t", enabled)
+}
+
+// IsConnLogEnabled reports the current value.
+func (e *Engine) IsConnLogEnabled() bool { return e.connLogEnabled.Load() }
 
 // SetDNS configures the DNS settings.
 // protocol: "PLAIN", "DOH", "DOT", "DOQ"
@@ -492,6 +542,10 @@ func (e *Engine) Stop() {
 	e.tcpStack = nil
 	pipe := e.tcpStackPipe.Swap(nil)
 
+	// Unblock the full-network engine loop (StartFull), if running.
+	fullDone := e.fullTunnelDone
+	e.fullTunnelDone = nil
+
 	// Close TUN, clear caches — all while locked
 	if e.tunFile != nil {
 		e.tunFile.Close()
@@ -569,6 +623,9 @@ func (e *Engine) Stop() {
 	if pipe != nil {
 		pipe.Close()
 	}
+	if fullDone != nil {
+		close(fullDone)
+	}
 	if stack != nil {
 		stack.Stop()
 	}
@@ -595,6 +652,13 @@ func (e *Engine) GetStats() string {
 
 // ServeDNS handles incoming DNS queries directly from a socket (no TUN fd).
 func (e *Engine) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
+	e.serveDNS(w, r, "")
+}
+
+// serveDNS is the implementation. appOverride, when non-empty, is used as
+// the logged app name (full-tunnel passes the UID-resolved package here so
+// DNS is attributed to the real app instead of the root-mode "RootProxy").
+func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) {
 	startTime := time.Now()
 	if len(r.Question) == 0 {
 		return
@@ -603,11 +667,31 @@ func (e *Engine) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	domain := strings.ToLower(r.Question[0].Name)
 	domain = strings.TrimSuffix(domain, ".")
 	queryType := r.Question[0].Qtype
+
+	// Local asset host: synthesize a response with a routable IP from
+	// the RFC 5737 documentation range so the browser can SYN to it
+	// and have the packet enter our TUN.
+	if domain == LocalAssetHost {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		if queryType == dns.TypeA {
+			rr, _ := dns.NewRR(fmt.Sprintf("%s 300 IN A %s", r.Question[0].Name, localAssetSynthIP.String()))
+			m.Answer = append(m.Answer, rr)
+		} else if queryType == dns.TypeAAAA {
+			// No IPv6 for local asset host; return empty NOERROR
+		}
+		_ = w.WriteMsg(m)
+		e.totalQueries.Add(1)
+		return
+	}
+
 	appName := "RootProxy"
 	// Try to resolve the real app name from the source port of the incoming connection.
 	// iptables REDIRECT preserves the original source port, so we can look up the UID
 	// in /proc/net/udp by matching that port.
-	if e.appResolver != nil {
+	if appOverride != "" {
+		appName = appOverride
+	} else if e.appResolver != nil {
 		if addr := w.RemoteAddr(); addr != nil {
 			srcPort := 0
 			srcIP := net.IPv4(127, 0, 0, 1)
@@ -1057,7 +1141,14 @@ func (e *Engine) StartStackMitm(certDir string) string {
 	if e.stackMitmFilter == nil {
 		e.stackMitmFilter = NewMitmFilter()
 	}
+	filter := e.stackMitmFilter
+	e.certDir = certDir
 	e.mu.Unlock()
+
+	// Persist the auto-blacklist alongside the CA so cert-pinned / EV
+	// domains discovered in one session are remembered in the next —
+	// otherwise every pinned site breaks once per app launch.
+	filter.LoadPersistentBlacklist(filepath.Join(certDir, "mitm_blacklist.txt"))
 
 	return certMgr.GetCACertPEM()
 }
@@ -1127,12 +1218,14 @@ func (e *Engine) startTcpStackParallel() error {
 	if certMgr != nil && filter != nil {
 		// Phase D path — MITM handler applies the full filtering flow.
 		stack.SetTcpHandler(newMitmTcpHandler(certMgr, filter, e, uidr, protectFn))
-		logf("TcpIpStack: MITM handler registered")
+		// Drop browser QUIC so HTTP/3 can't bypass the TCP-TLS MITM.
+		stack.SetUdpHandler(newMitmUdpHandler(filter, uidr, protectFn))
+		logf("TcpIpStack: MITM handler registered (TCP + QUIC-suppressing UDP)")
 	} else {
 		// Phase C default — direct-dial passthrough, no MITM.
 		stack.SetTcpHandler(newProtectedTcpHandler(uidr, protectFn))
+		stack.SetUdpHandler(newProtectedUdpHandler(uidr, protectFn))
 	}
-	stack.SetUdpHandler(newProtectedUdpHandler(uidr, protectFn))
 
 	if err := stack.Start(pipe, mtu); err != nil {
 		e.mu.Lock()

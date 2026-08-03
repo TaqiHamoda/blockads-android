@@ -117,6 +117,7 @@ class SettingsViewModel(
     val safeSearchEnabled: StateFlow<Boolean> = appPrefs.safeSearchEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+
     val youtubeRestrictedMode: StateFlow<Boolean> = appPrefs.youtubeRestrictedMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -285,6 +286,7 @@ class SettingsViewModel(
             requestVpnRestart()
         }
     }
+
 
     fun setYoutubeRestrictedMode(enabled: Boolean) {
         viewModelScope.launch {

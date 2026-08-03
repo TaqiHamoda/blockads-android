@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Replay
@@ -43,6 +44,7 @@ fun ProtectionSection(
     networkSwitchDelaySec: Int,
     safeSearchEnabled: Boolean,
     youtubeRestrictedMode: Boolean,
+
     dnsResponseType: String,
     upstreamDNS: String,
     onSetAutoReconnect: (Boolean) -> Unit,
@@ -50,6 +52,7 @@ fun ProtectionSection(
     onSetNetworkSwitchDelayEnabled: (Boolean) -> Unit,
     onSetNetworkSwitchDelaySec: (Int) -> Unit,
     onSetSafeSearchEnabled: (Boolean) -> Unit,
+
     onSetYoutubeRestrictedMode: (Boolean) -> Unit,
     onShowDnsResponseTypeDialog: () -> Unit,
     onNavigateToDNSProvider: () -> Unit,
@@ -130,6 +133,7 @@ fun ProtectionSection(
                         }
                     }
                 }
+
                 // Safe Search
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 16.dp),

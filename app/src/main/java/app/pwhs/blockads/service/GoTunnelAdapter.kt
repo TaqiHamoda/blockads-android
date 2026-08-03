@@ -45,6 +45,10 @@ class GoTunnelAdapter(
      * This is a lambda so it always reads the latest value from [AdBlockVpnService].
      */
     private val firewallManagerProvider: () -> FirewallManager?,
+    /**
+     * Returns whether DNS logs should be recorded to the database.
+     */
+    private val recordLogProvider: () -> Boolean,
 ) {
     private val engine = tunnel.Tunnel.newEngine()
 
@@ -158,6 +162,23 @@ class GoTunnelAdapter(
     }
 
     /**
+     * UID→package resolver for full-tunnel per-app attribution + connection
+     * logging. Takes only an int (no byte[]), so it's safe from Go's
+     * concurrent flow hot path (unlike [AppResolver], whose byte[] args
+     * panic under cgocheck). Returns the package name; the log callback maps
+     * it to a friendly label.
+     */
+    private fun setupAppUidResolver() {
+        engine.setAppUidResolver(tunnel.AppUidResolver { uid ->
+            try {
+                context.packageManager.getPackagesForUid(uid.toInt())?.firstOrNull() ?: ""
+            } catch (e: Exception) {
+                ""
+            }
+        })
+    }
+
+    /**
      * Set up the app resolver to get the AppName for every DNS query (used for logging).
      * Uses [AppNameResolver] to map source port → UID → app name.
      */
@@ -202,10 +223,26 @@ class GoTunnelAdapter(
     }
 
     /**
+     * Mirror the "record logs" preference into the Go engine.
+     *
+     * Connection logging resolves the owning app for each new flow, which
+     * costs a getConnectionOwnerUid plus a getPackagesForUid binder round
+     * trip. The Kotlin log callback checks [recordLogProvider] too, but by
+     * then Go has already paid for both — so the engine needs the flag
+     * itself to skip the work entirely.
+     */
+    fun setConnLogEnabled(enabled: Boolean) {
+        engine.setConnLogEnabled(enabled)
+    }
+
+    /**
      * Set the DNS log callback.
      */
     private fun setupLogCallback() {
+        engine.setConnLogEnabled(recordLogProvider())
         engine.setLogCallback { domain, blocked, queryType, responseTimeMs, packageNameOrAppName, resolvedIP, blockedBy ->
+            if (!recordLogProvider()) return@setLogCallback
+
             scope.launch(Dispatchers.IO) {
                 try {
                     // Try to resolve the user-friendly App Name string from the package name
@@ -256,6 +293,7 @@ class GoTunnelAdapter(
         httpsFilteringEnabled: Boolean = false,
         selectedBrowsers: Set<String> = emptySet(),
         certDir: String = "",
+        filterHttp3: Boolean = false,
         socketProtector: ((Int) -> Boolean)? = null
     ) {
         if (isRunning) return
@@ -282,6 +320,7 @@ class GoTunnelAdapter(
                 engine.setUseTcpStack(true)
                 engine.startStackMitm(certDir)
                 engine.setMitmAllowedUIDs(uids)
+                engine.setFilterHttp3(filterHttp3)
 
                 // Load curated passthrough domains (banking, payment,
                 // gov, secure messaging, etc.) from assets so cert-
@@ -307,6 +346,7 @@ class GoTunnelAdapter(
         setupFirewallChecker()
         setupLogCallback()
         setupUidResolver()
+        setupAppUidResolver()
 
         // Give Go the paths to the Mmap logs so it can read them natively for max speed
         updateTries()
@@ -320,9 +360,23 @@ class GoTunnelAdapter(
             socketProtector?.invoke(fd.toInt()) ?: false
         }
 
-        // Start the Go engine (this blocks the thread)
-        // WireGuard setup happens atomically inside Go before any packets are read.
-        engine.start(fd.toLong(), protector, wgConfigJson)
+        // Engine selection:
+        //   • WireGuard → engine.start (WG handles its own full-route
+        //     tunneling; setup happens atomically inside Go before any
+        //     packets are read).
+        //   • Otherwise → engine.startFull (full-tunnel direct-TUN engine;
+        //     gVisor reads TUN directly — no DnsInterceptor/packetPipe
+        //     bridge, so it doesn't deadlock under browser load). HTTPS
+        //     MITM is layered on top when startStackMitm was called above;
+        //     without it, full-tunnel still does all-app DNS filter +
+        //     per-app firewall + protected passthrough.
+        if (wgConfigJson.isNotEmpty()) {
+            Timber.d("Starting Go tunnel engine in WIREGUARD mode (fd=$fd)")
+            engine.start(fd.toLong(), protector, wgConfigJson)
+        } else {
+            Timber.d("Starting Go tunnel engine in FULL-TUNNEL mode (fd=$fd, mitm=${httpsFilteringEnabled && certDir.isNotEmpty()})")
+            engine.startFull(fd.toLong(), protector)
+        }
     }
 
     /**

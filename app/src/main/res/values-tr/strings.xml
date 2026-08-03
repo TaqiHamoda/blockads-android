@@ -541,7 +541,7 @@ Desteklenen formatlar:
     <string name="trusted_networks_list_header">Güvenilir Wi-Fi ağları</string>
     <string name="trusted_networks_empty">Henüz güvenilir ağ yok. BlockAds\'i duraklatmak için geçerli ağı ekleyin.</string>
     <string name="trusted_networks_paused_title">Güvenilir ağda duraklatıldı</string>
-    <string name="trusted_networks_paused_text">BlockAds "%1$s" ağında duraklatıldı — bu ağdan ayrıldığınızda otomatik olarak devam eder.</string>
+    <string name="trusted_networks_paused_text">BlockAds &quot;%1$s&quot; ağında duraklatıldı — bu ağdan ayrıldığınızda otomatik olarak devam eder.</string>
     <string name="trusted_networks_paused_text_generic">BlockAds güvenilir bir Wi-Fi ağında duraklatıldı — ayrıldığınızda devam eder.</string>
     <string name="status_paused">Duraklatıldı</string>
     <string name="home_paused_trusted_short">Güvenilir ağda duraklatıldı</string>
@@ -574,4 +574,7 @@ Desteklenen formatlar:
     <string name="settings_device_owner_section_desc">Cihaz Sahibi kısıtlamalarını yönetin. Sadece BlockAds Cihaz Sahibi olduğu için görünür.</string>
     <string name="settings_device_owner_enforce_restrictions">Cihaz Kısıtlamaları</string>
     <string name="settings_device_owner_enforce_restrictions_desc">Uygulama düzeyinde kısıtlamalar uygulamak için etkinleştirin (geliştirici araçlarını engelleme vb.). Kısıtlamaları kaldırmak için devre dışı bırakın.</string>
+    <string name="https_filtering_http3_title">HTTP/3 (QUIC) Filtrele</string>
+    <string name="https_filtering_http3_desc">Maksimum reklam filtrelemesi için filtrelenebilir bağlantıları zorlamak amacıyla tarayıcı QUIC\'ini engelleyin. Bazı sayfaların kısmen yüklenmesine neden olabilir. Sayfalar tam olarak yüklenmiyorsa kapatın.</string>
+    <string name="log_record_logs">Günlükleri Kaydet</string>
 </resources>
