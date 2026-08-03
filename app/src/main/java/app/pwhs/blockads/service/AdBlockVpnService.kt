@@ -269,23 +269,27 @@ class AdBlockVpnService : VpnService() {
 
         when (intent?.action) {
             ACTION_STOP -> {
-                val isLocked = runBlocking { appPrefs.lockdownEnabled.first() }
-                if (isLocked) {
-                    Timber.w("Stop request ignored: VPN is in Lockdown Mode.")
-                    return START_STICKY
+                serviceScope.launch {
+                    val isLocked = appPrefs.lockdownEnabled.first()
+                    if (isLocked) {
+                        Timber.w("Stop request ignored: VPN is in Lockdown Mode.")
+                        return@launch
+                    }
+                    stopVpn()
                 }
-                stopVpn()
-                return START_NOT_STICKY
+                return START_STICKY
             }
 
             ACTION_PAUSE_1H -> {
-                val isLocked = runBlocking { appPrefs.lockdownEnabled.first() }
-                if (isLocked) {
-                    Timber.w("Pause request ignored: VPN is in Lockdown Mode.")
-                    return START_STICKY
+                serviceScope.launch {
+                    val isLocked = appPrefs.lockdownEnabled.first()
+                    if (isLocked) {
+                        Timber.w("Pause request ignored: VPN is in Lockdown Mode.")
+                        return@launch
+                    }
+                    pauseVpn()
                 }
-                pauseVpn()
-                return START_NOT_STICKY
+                return START_STICKY
             }
 
             ACTION_RESTART -> {

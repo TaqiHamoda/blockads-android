@@ -58,7 +58,11 @@ class BlockAdsApplication : Application() {
             // Device Owner Mode: enforce restrictions if provisioned AND enabled in settings
             val deviceOwnerManager = app.pwhs.blockads.service.DeviceOwnerManager(this@BlockAdsApplication)
             if (deviceOwnerManager.isDeviceOwner() && appPreferences.deviceOwnerRestrictionsEnabled.first()) {
-                deviceOwnerManager.enforceRestrictions()
+                val success = deviceOwnerManager.enforceRestrictions()
+                if (!success) {
+                    Timber.w("Device Owner restrictions enforcement failed on startup")
+                    appPreferences.setDeviceOwnerRestrictionsEnabled(false)
+                }
             }
         }
 

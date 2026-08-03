@@ -489,11 +489,12 @@ class SettingsViewModel(
 
     fun setRestrictionsEnforced(enforced: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
-            appPrefs.setDeviceOwnerRestrictionsEnabled(enforced)
             if (enforced) {
-                deviceOwnerManager.enforceRestrictions()
+                val success = deviceOwnerManager.enforceRestrictions()
+                appPrefs.setDeviceOwnerRestrictionsEnabled(success)
             } else {
                 deviceOwnerManager.clearRestrictions()
+                appPrefs.setDeviceOwnerRestrictionsEnabled(false)
             }
             _restrictionsEnforced.value = deviceOwnerManager.areRestrictionsEnforced()
         }
