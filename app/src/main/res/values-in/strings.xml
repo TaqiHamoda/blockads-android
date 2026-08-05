@@ -562,4 +562,10 @@
     <string name="https_filtering_http3_title">Filter HTTP/3 (QUIC)</string>
     <string name="https_filtering_http3_desc">Blokir QUIC browser untuk memaksa koneksi yang dapat disaring agar penyaringan iklan maksimal. Dapat menyebabkan beberapa halaman hanya dimuat sebagian. Matikan jika halaman tidak dimuat sepenuhnya.</string>
     <string name="log_record_logs">Rekam Log</string>
+    <string name="settings_device_owner_clear_owner">Hapus Pemilik Perangkat</string>
+    <string name="settings_device_owner_clear_owner_desc">Mencabut hak akses administratif Pemilik Perangkat dari BlockAds.</string>
+    <string name="clear_device_owner_confirm_title">Hapus Hak Akses Pemilik Perangkat?</string>
+    <string name="clear_device_owner_confirm_message">Apakah Anda yakin ingin menghapus hak akses Pemilik Perangkat? Ini akan menghapus semua kebijakan administratif dan mengizinkan aplikasi diinstal ulang atau dihapus.</string>
+    <string name="device_owner_cleared_success">Hak akses Pemilik Perangkat berhasil dihapus</string>
+    <string name="device_owner_clear_failed">Gagal menghapus hak akses Pemilik Perangkat</string>
 </resources>

@@ -502,5 +502,17 @@ class SettingsViewModel(
         }
     }
 
+    fun clearDeviceOwner() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = deviceOwnerManager.clearDeviceOwner()
+            _isDeviceOwner.value = deviceOwnerManager.isDeviceOwner()
+            _restrictionsEnforced.value = deviceOwnerManager.areRestrictionsEnforced()
+            if (success) {
+                _events.toast(R.string.device_owner_cleared_success)
+            } else {
+                _events.toast(R.string.device_owner_clear_failed)
+            }
+        }
+    }
 
 }

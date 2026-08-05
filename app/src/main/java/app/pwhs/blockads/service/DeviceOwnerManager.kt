@@ -104,4 +104,19 @@ class DeviceOwnerManager(private val context: Context) {
         return success
     }
 
+    fun clearDeviceOwner(): Boolean {
+        if (!isDeviceOwner()) return false
+
+        Timber.d("Clearing Device Owner status")
+        return try {
+            clearRestrictions()
+            devicePolicyManager.clearDeviceOwnerApp(context.packageName)
+            Timber.i("Device owner cleared successfully")
+            true
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to clear Device Owner")
+            false
+        }
+    }
+
 }

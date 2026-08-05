@@ -566,4 +566,10 @@
     <string name="https_filtering_http3_title">Filtrovat HTTP/3 (QUIC)</string>
     <string name="https_filtering_http3_desc">Blokovat QUIC v prohlížeči pro vynucení filtrovatelných připojení pro maximální filtrování reklam. Může způsobit částečné načítání některých stránek. Vypněte, pokud se stránky nenačítají úplně.</string>
     <string name="log_record_logs">Zaznamenávat protokoly</string>
+    <string name="settings_device_owner_clear_owner">Odebrat správce zařízení</string>
+    <string name="settings_device_owner_clear_owner_desc">Odebrat administrativní oprávnění správce zařízení pro BlockAds.</string>
+    <string name="clear_device_owner_confirm_title">Odebrat oprávnění správce zařízení?</string>
+    <string name="clear_device_owner_confirm_message">Opravdu chcete odebrat oprávnění správce zařízení? Tím se zruší všechny administrativní zásady a bude možné aplikaci odinstalovat.</string>
+    <string name="device_owner_cleared_success">Oprávnění správce zařízení byla odebrána</string>
+    <string name="device_owner_clear_failed">Odebrání oprávnění správce zařízení se nezdařilo</string>
 </resources>

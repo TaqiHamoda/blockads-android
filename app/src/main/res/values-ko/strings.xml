@@ -562,4 +562,10 @@
     <string name="https_filtering_http3_title">HTTP/3(QUIC) 필터링</string>
     <string name="https_filtering_http3_desc">필터링 가능한 연결을 강제하여 광고 필터링을 극대화하려면 브라우저 QUIC를 차단하세요. 일부 페이지가 부분적으로만 로드될 수 있습니다. 페이지가 완전히 로드되지 않으면 끄십시오.</string>
     <string name="log_record_logs">로그 기록</string>
+    <string name="settings_device_owner_clear_owner">디바이스 소유자 제거</string>
+    <string name="settings_device_owner_clear_owner_desc">BlockAds의 디바이스 소유자 관리자 권한을 철회합니다.</string>
+    <string name="clear_device_owner_confirm_title">디바이스 소유자 권한을 제거하시겠습니까?</string>
+    <string name="clear_device_owner_confirm_message">디바이스 소유자 권한을 제거하시겠습니까? 모든 관리 정책이 삭제되며 앱을 삭제할 수 있게 됩니다.</string>
+    <string name="device_owner_cleared_success">디바이스 소유자 권한이 제거되었습니다</string>
+    <string name="device_owner_clear_failed">디바이스 소유자 권한 제거 실패</string>
 </resources>

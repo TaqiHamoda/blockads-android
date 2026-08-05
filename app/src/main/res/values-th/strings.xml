@@ -562,4 +562,10 @@
     <string name="https_filtering_http3_title">กรอง HTTP/3 (QUIC)</string>
     <string name="https_filtering_http3_desc">บล็อก QUIC ของเบราว์เซอร์เพื่อบังคับการเชื่อมต่อที่กรองได้สำหรับการกรองโฆษณาสูงสุด อาจทำให้บางหน้าโหลดเพียงบางส่วน ปิดหากหน้าเว็บโหลดไม่สมบูรณ์</string>
     <string name="log_record_logs">บันทึกประวัติ</string>
+    <string name="settings_device_owner_clear_owner">ลบสิทธิ์เจ้าของอุปกรณ์</string>
+    <string name="settings_device_owner_clear_owner_desc">ยกเลิกสิทธิ์การดูแลระบบเจ้าของอุปกรณ์สำหรับ BlockAds</string>
+    <string name="clear_device_owner_confirm_title">ลบสิทธิ์เจ้าของอุปกรณ์หรือไม่?</string>
+    <string name="clear_device_owner_confirm_message">คุณแน่ใจหรือไม่ว่าต้องการลบสิทธิ์เจ้าของอุปกรณ์? การดำเนินการนี้จะยกเลิกนโยบายการดูแลระบบทั้งหมดและอนุญาตให้ถอนการติดตั้งแอปได้</string>
+    <string name="device_owner_cleared_success">ลบสิทธิ์เจ้าของอุปกรณ์เรียบร้อยแล้ว</string>
+    <string name="device_owner_clear_failed">ลบสิทธิ์เจ้าของอุปกรณ์ไม่สำเร็จ</string>
 </resources>

@@ -564,4 +564,10 @@
     <string name="https_filtering_http3_title">Filtrer HTTP/3 (QUIC)</string>
     <string name="https_filtering_http3_desc">Bloquer QUIC du navigateur pour forcer les connexions filtrables pour un filtrage maximal des publicités. Peut entraîner le chargement partiel de certaines pages. Désactivez si les pages ne se chargent pas complètement.</string>
     <string name="log_record_logs">Enregistrer les journaux</string>
+    <string name="settings_device_owner_clear_owner">Supprimer le propriétaire de l\'appareil</string>
+    <string name="settings_device_owner_clear_owner_desc">Révoker les privilèges d\'administration de propriétaire de l\'appareil pour BlockAds.</string>
+    <string name="clear_device_owner_confirm_title">Supprimer les privilèges de propriétaire ?</string>
+    <string name="clear_device_owner_confirm_message">Êtes-vous sûr de vouloir supprimer les privilèges de propriétaire de l\'appareil ? Cela effacera toutes les règles d\'administration et permettra la désinstallation de l\'application.</string>
+    <string name="device_owner_cleared_success">Privilèges de propriétaire de l\'appareil supprimés</string>
+    <string name="device_owner_clear_failed">Échec de la suppression des privilèges de propriétaire de l\'appareil</string>
 </resources>

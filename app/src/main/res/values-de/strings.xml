@@ -564,4 +564,10 @@
     <string name="https_filtering_http3_title">HTTP/3 (QUIC) filtern</string>
     <string name="https_filtering_http3_desc">Browser-QUIC blockieren, um filterbare Verbindungen für maximale Werbefilterung zu erzwingen. Kann dazu führen, dass einige Seiten nur teilweise geladen werden. Deaktivieren Sie dies, wenn Seiten nicht vollständig geladen werden.</string>
     <string name="log_record_logs">Protokolle aufzeichnen</string>
+    <string name="settings_device_owner_clear_owner">Geräteadministrator entfernen</string>
+    <string name="settings_device_owner_clear_owner_desc">Geräteadministrator-Rechte für BlockAds widerrufen.</string>
+    <string name="clear_device_owner_confirm_title">Geräteadministrator-Rechte entfernen?</string>
+    <string name="clear_device_owner_confirm_message">Möchten Sie die Geräteadministrator-Rechte wirklich entfernen? Dadurch werden alle Richtlinien aufgehoben und die App kann deinstalliert werden.</string>
+    <string name="device_owner_cleared_success">Geräteadministrator-Rechte entfernt</string>
+    <string name="device_owner_clear_failed">Entfernen der Geräteadministrator-Rechte fehlgeschlagen</string>
 </resources>

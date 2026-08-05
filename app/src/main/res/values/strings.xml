@@ -595,5 +595,11 @@
     <string name="settings_device_owner_section_desc">Manage Device Owner restrictions. Only visible because BlockAds is a Device Owner.</string>
     <string name="settings_device_owner_enforce_restrictions">Device Restrictions</string>
     <string name="settings_device_owner_enforce_restrictions_desc">Enable to apply app-level restrictions (block developer tools, etc). Disable to clear them.</string>
+    <string name="settings_device_owner_clear_owner">Remove Device Owner</string>
+    <string name="settings_device_owner_clear_owner_desc">Revoke Device Owner administrative privileges from BlockAds.</string>
+    <string name="clear_device_owner_confirm_title">Remove Device Owner Privileges?</string>
+    <string name="clear_device_owner_confirm_message">Are you sure you want to remove Device Owner privileges? This will clear all administrative policies and allow the app to be uninstalled.</string>
+    <string name="device_owner_cleared_success">Device Owner privileges removed</string>
+    <string name="device_owner_clear_failed">Failed to remove Device Owner privileges</string>
     <string name="log_record_logs">Record Logs</string>
 </resources>

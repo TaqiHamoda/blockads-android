@@ -160,7 +160,8 @@ fun SettingsScreen(
                 DeviceOwnerSection(
                     lockdownEnabled = lockdownEnabled,
                     restrictionsEnforced = restrictionsEnforced,
-                    onSetRestrictionsEnforced = { viewModel.setRestrictionsEnforced(it) }
+                    onSetRestrictionsEnforced = { viewModel.setRestrictionsEnforced(it) },
+                    onClearDeviceOwner = { viewModel.clearDeviceOwner() }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
