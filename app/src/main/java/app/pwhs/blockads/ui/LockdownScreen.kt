@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,7 @@ fun LockdownScreen(
     val appPrefs: app.pwhs.blockads.data.datastore.AppPreferences = org.koin.compose.koinInject()
     val customDnsRuleDao: CustomDnsRuleDao = org.koin.compose.koinInject()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -258,14 +260,14 @@ fun LockdownScreen(
                             )
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.blocklist_domain_added, cleanDomain),
+                                resources.getString(R.string.blocklist_domain_added, cleanDomain),
                                 Toast.LENGTH_SHORT
                             ).show()
                             ServiceController.requestRestart(context)
                         } else {
                             Toast.makeText(
                                 context,
-                                context.getString(R.string.blocklist_domain_already_exists),
+                                resources.getString(R.string.blocklist_domain_already_exists),
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
