@@ -552,6 +552,7 @@
     <string name="lockdown_screen_cancel_desc">キャンセルすると、タイマーは元の時間に戻ります。</string>
     <string name="lockdown_screen_duration">タイマー時間：%1$s</string>
     <string name="lockdown_screen_start">クールダウンタイマーを開始</string>
+    <string name="lockdown_screen_add_blacklist">ウェブサイトをブラックリストに追加</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">BlockAdsの永続性とポリシー制限を適用するデバイス管理者。</string>

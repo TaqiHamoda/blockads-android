@@ -554,6 +554,7 @@
     <string name="lockdown_screen_cancel_desc">Al cancelar, el temporizador se restablecerá a la duración completa.</string>
     <string name="lockdown_screen_duration">Duración del temporizador: %1$s</string>
     <string name="lockdown_screen_start">Iniciar temporizador de enfriamiento</string>
+    <string name="lockdown_screen_add_blacklist">Añadir sitio web a la lista negra</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Administrador del dispositivo para hacer cumplir la persistencia y las restricciones de política para BlockAds.</string>

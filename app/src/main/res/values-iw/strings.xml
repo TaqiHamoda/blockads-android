@@ -554,6 +554,7 @@
     <string name="lockdown_screen_cancel_desc">ביטול יאפס את הטיימר בחזרה למשך הזמן המלא.</string>
     <string name="lockdown_screen_duration">משך הטיימר: %1$s</string>
     <string name="lockdown_screen_start">הפעל טיימר צינון</string>
+    <string name="lockdown_screen_add_blacklist">הוסף אתר לרשימה השחורה</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">מנהל מכשיר לאכיפת התמדה והגבלות מדיניות עבור BlockAds.</string>

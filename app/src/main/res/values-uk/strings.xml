@@ -558,6 +558,7 @@
     <string name="lockdown_screen_cancel_desc">У разі скасування таймер повернеться до повного часу.</string>
     <string name="lockdown_screen_duration">Тривалість таймера: %1$s</string>
     <string name="lockdown_screen_start">Запустити таймер</string>
+    <string name="lockdown_screen_add_blacklist">Додати сайт до чорного списку</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Адміністратор пристрою для забезпечення стійкості та обмежень політики для BlockAds.</string>

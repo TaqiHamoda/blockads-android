@@ -1,21 +1,30 @@
 package app.pwhs.blockads.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pwhs.blockads.R
+import app.pwhs.blockads.data.dao.CustomDnsRuleDao
+import app.pwhs.blockads.data.entities.CustomDnsRule
+import app.pwhs.blockads.data.entities.RuleType
+import app.pwhs.blockads.service.ServiceController
+import app.pwhs.blockads.ui.domainrules.dialog.AddDomainDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun LockdownScreen(
@@ -27,6 +36,12 @@ fun LockdownScreen(
     onTimeTamperingDetected: () -> Unit
 ) {
     val appPrefs: app.pwhs.blockads.data.datastore.AppPreferences = org.koin.compose.koinInject()
+    val customDnsRuleDao: CustomDnsRuleDao = org.koin.compose.koinInject()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var showAddDialog by remember { mutableStateOf(false) }
+
     // Prevent back navigation
     BackHandler(enabled = true) {}
 
@@ -159,7 +174,7 @@ fun LockdownScreen(
                     modifier = Modifier.fillMaxWidth().height(8.dp),
                 )
                 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(36.dp))
                 
                 Button(
                     onClick = onCancelCooldown,
@@ -194,7 +209,7 @@ fun LockdownScreen(
                     fontWeight = FontWeight.SemiBold
                 )
                 
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(36.dp))
                 
                 Button(
                     onClick = { onStartCooldown(System.currentTimeMillis()) },
@@ -203,6 +218,61 @@ fun LockdownScreen(
                     Text(stringResource(R.string.lockdown_screen_start))
                 }
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = { showAddDialog = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.lockdown_screen_add_blacklist))
+            }
         }
+    }
+
+    if (showAddDialog) {
+        AddDomainDialog(
+            isAllow = false,
+            onDismiss = { showAddDialog = false },
+            onAdd = { inputDomain ->
+                val cleanDomain = inputDomain.trim().lowercase()
+                if (cleanDomain.isNotBlank()) {
+                    scope.launch {
+                        val allRules = customDnsRuleDao.getAll()
+                        val exists = allRules.any {
+                            it.ruleType == RuleType.BLOCK && it.domain.equals(cleanDomain, ignoreCase = true)
+                        }
+                        if (!exists) {
+                            customDnsRuleDao.insert(
+                                CustomDnsRule(
+                                    rule = "||$cleanDomain^",
+                                    ruleType = RuleType.BLOCK,
+                                    domain = cleanDomain
+                                )
+                            )
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.blocklist_domain_added, cleanDomain),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            ServiceController.requestRestart(context)
+                        } else {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.blocklist_domain_already_exists),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+                showAddDialog = false
+            }
+        )
     }
 }

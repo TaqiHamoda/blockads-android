@@ -556,6 +556,7 @@
     <string name="lockdown_screen_cancel_desc">Zrušením se časovač resetuje zpět na plnou dobu.</string>
     <string name="lockdown_screen_duration">Doba trvání časovače: %1$s</string>
     <string name="lockdown_screen_start">Spustit časovač uklidnění</string>
+    <string name="lockdown_screen_add_blacklist">Přidat web na černou listinu</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Správce zařízení k vynucení persistence a omezení zásad pro BlockAds.</string>

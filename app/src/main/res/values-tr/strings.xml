@@ -575,6 +575,7 @@ Desteklenen formatlar:
     <string name="lockdown_screen_cancel_desc">İptal etmek sayacı tam süreye sıfırlayacaktır.</string>
     <string name="lockdown_screen_duration">Sayaç Süresi: %1$s</string>
     <string name="lockdown_screen_start">Bekleme Sayacını Başlat</string>
+    <string name="lockdown_screen_add_blacklist">Web Sitesini Kara Listeye Ekle</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">BlockAds için kalıcılık ve politika kısıtlamalarını zorlayacak cihaz yöneticisi.</string>

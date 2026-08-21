@@ -570,6 +570,7 @@
     <string name="lockdown_screen_cancel_desc">سيؤدي الإلغاء إلى إعادة تعيين المؤقت للوقت الكامل.</string>
     <string name="lockdown_screen_duration">مدة المؤقت: %1$s</string>
     <string name="lockdown_screen_start">بدء مؤقت التهدئة</string>
+    <string name="lockdown_screen_add_blacklist">إضافة موقع إلى القائمة السوداء</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">مسؤول الجهاز لفرض الاستمرارية وقيود السياسة لـ BlockAds.</string>

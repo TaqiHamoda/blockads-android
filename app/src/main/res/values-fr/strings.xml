@@ -554,6 +554,7 @@
     <string name="lockdown_screen_cancel_desc">L\'annulation réinitialisera le minuteur à sa durée totale.</string>
     <string name="lockdown_screen_duration">Durée du minuteur : %1$s</string>
     <string name="lockdown_screen_start">Démarrer le minuteur de refroidissement</string>
+    <string name="lockdown_screen_add_blacklist">Ajouter un site à la liste noire</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Administrateur de l\'appareil pour appliquer la persistance et les restrictions de stratégie pour BlockAds.</string>

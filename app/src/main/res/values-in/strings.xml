@@ -552,6 +552,7 @@
     <string name="lockdown_screen_cancel_desc">Membatalkan akan mengatur ulang penghitung waktu kembali ke durasi penuh.</string>
     <string name="lockdown_screen_duration">Durasi Pengatur Waktu: %1$s</string>
     <string name="lockdown_screen_start">Mulai Waktu Tunggu</string>
+    <string name="lockdown_screen_add_blacklist">Tambahkan Situs Web ke Daftar Hitam</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Administrator Perangkat untuk menegakkan persistensi dan batasan kebijakan untuk BlockAds.</string>

@@ -552,6 +552,7 @@
     <string name="lockdown_screen_cancel_desc">การยกเลิกจะรีเซ็ตตัวนับเวลากลับเป็นระยะเวลาเต็ม</string>
     <string name="lockdown_screen_duration">ระยะเวลา: %1$s</string>
     <string name="lockdown_screen_start">เริ่มตัวนับเวลาพัก</string>
+    <string name="lockdown_screen_add_blacklist">เพิ่มเว็บไซต์ในรายการบล็อก</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">ผู้ดูแลอุปกรณ์เพื่อบังคับใช้ความต่อเนื่องและข้อจำกัดนโยบายสำหรับ BlockAds</string>

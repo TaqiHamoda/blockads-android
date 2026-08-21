@@ -552,6 +552,7 @@
     <string name="lockdown_screen_cancel_desc">取消将使倒计时重置回完整时间。</string>
     <string name="lockdown_screen_duration">倒计时：%1$s</string>
     <string name="lockdown_screen_start">启动冷却倒计时</string>
+    <string name="lockdown_screen_add_blacklist">添加网站至黑名单</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">设备管理员可强制执行 BlockAds 的持久性和策略限制。</string>

@@ -556,6 +556,7 @@
     <string name="lockdown_screen_cancel_desc">Anulowanie spowoduje zresetowanie zegara do pełnego czasu.</string>
     <string name="lockdown_screen_duration">Czas trwania: %1$s</string>
     <string name="lockdown_screen_start">Uruchom zegar oczekiwania</string>
+    <string name="lockdown_screen_add_blacklist">Dodaj witrynę do czarnej listy</string>
 
     <!-- Device Owner Mode -->
     <string name="device_admin_description">Administrator urządzenia wymuszający trwałość i ograniczenia zasad dla BlockAds.</string>
