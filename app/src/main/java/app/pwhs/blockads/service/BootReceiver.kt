@@ -15,24 +15,43 @@ import timber.log.Timber
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
-            intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        val intentAction = intent.action
+        if (intentAction != Intent.ACTION_BOOT_COMPLETED &&
+            intentAction != Intent.ACTION_MY_PACKAGE_REPLACED &&
+            intentAction != Intent.ACTION_LOCKED_BOOT_COMPLETED
+        ) return
 
         val pendingResult = goAsync()
-        val prefs = AppPreferences(context)
 
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                val autoReconnect = prefs.autoReconnect.first()
-                val wasEnabled = prefs.vpnEnabled.first()
-                val routingMode = prefs.routingMode.first()
-                val isLocked = prefs.lockdownEnabled.first()
+                val userManager = context.getSystemService(Context.USER_SERVICE) as? android.os.UserManager
+                val userLocked = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+                        userManager != null && !userManager.isUserUnlocked
+
+                // Lockdown Mode: always re-apply protection on boot/update,
+                // ignoring the auto-reconnect preference. DataStore is only
+                // readable once the user is unlocked.
+                var isLockdown = false
+
+                val (autoReconnect, wasEnabled, routingMode) = if (userLocked) {
+                    val directPrefs = app.pwhs.blockads.data.datastore.DirectBootPreferences(context)
+                    Triple(directPrefs.autoReconnect, directPrefs.wasVpnEnabled, directPrefs.routingMode)
+                } else {
+                    val prefs = AppPreferences(context)
+                    isLockdown = prefs.lockdownEnabled.first()
+                    Triple(prefs.autoReconnect.first(), prefs.vpnEnabled.first(), prefs.routingMode.first())
+                }
 
                 // Root Mode: iptables rules are volatile (cleared on reboot).
                 // Re-apply rules by starting RootProxyService.
                 // Also restarts after app update (MY_PACKAGE_REPLACED).
-                if (isLocked || (autoReconnect && wasEnabled)) {
-                    val trigger = if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) "app update" else "boot"
+                if (isLockdown || (autoReconnect && wasEnabled)) {
+                    val trigger = when (intentAction) {
+                        Intent.ACTION_MY_PACKAGE_REPLACED -> "app update"
+                        Intent.ACTION_LOCKED_BOOT_COMPLETED -> "locked direct boot"
+                        else -> "boot"
+                    }
                     if (routingMode == AppPreferences.ROUTING_MODE_ROOT) {
                         Timber.d("Auto-starting Root Proxy mode after $trigger")
                         val serviceIntent = Intent(context, RootProxyService::class.java).apply {
@@ -60,7 +79,7 @@ class BootReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Timber.e(e, "Error starting service after boot")
             } finally {
-                pendingResult.finish()
+                pendingResult?.finish()
             }
         }
     }

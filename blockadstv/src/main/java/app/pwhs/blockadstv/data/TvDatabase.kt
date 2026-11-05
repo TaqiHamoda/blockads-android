@@ -7,10 +7,12 @@ import androidx.room.RoomDatabase
 import app.pwhs.blockadstv.data.dao.CustomDnsRuleDao
 import app.pwhs.blockadstv.data.dao.DnsLogDao
 import app.pwhs.blockadstv.data.dao.FilterListDao
+import app.pwhs.blockadstv.data.dao.FirewallRuleDao
 import app.pwhs.blockadstv.data.dao.WhitelistDomainDao
 import app.pwhs.blockadstv.data.entities.CustomDnsRule
 import app.pwhs.blockadstv.data.entities.DnsLogEntry
 import app.pwhs.blockadstv.data.entities.FilterList
+import app.pwhs.blockadstv.data.entities.FirewallRule
 import app.pwhs.blockadstv.data.entities.WhitelistDomain
 
 @Database(
@@ -19,8 +21,9 @@ import app.pwhs.blockadstv.data.entities.WhitelistDomain
         FilterList::class,
         WhitelistDomain::class,
         CustomDnsRule::class,
+        FirewallRule::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class TvDatabase : RoomDatabase() {
@@ -29,6 +32,7 @@ abstract class TvDatabase : RoomDatabase() {
     abstract fun filterListDao(): FilterListDao
     abstract fun whitelistDomainDao(): WhitelistDomainDao
     abstract fun customDnsRuleDao(): CustomDnsRuleDao
+    abstract fun firewallRuleDao(): FirewallRuleDao
 
     companion object {
         @Volatile

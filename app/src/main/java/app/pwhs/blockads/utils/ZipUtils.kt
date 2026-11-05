@@ -21,8 +21,9 @@ object ZipUtils {
      * Downloads a ZIP file from [downloadUrl] and extracts its contents into [destDir].
      *
      * - Streams directly from network into ZipInputStream (no intermediate file)
+     * - Rejects non-2xx responses instead of extracting the error body
      * - Guards against zip-slip path traversal attacks
-     * - On failure, cleans up all partially extracted files
+     * - On failure, removes only the entries this call created
      *
      * @param client Ktor HttpClient for downloading
      * @param downloadUrl URL of the ZIP file
@@ -33,13 +34,20 @@ object ZipUtils {
     suspend fun downloadAndExtractZip(
         client: HttpClient,
         downloadUrl: String,
-        destDir: File
+        destDir: File,
+        onProgress: ((Int) -> Unit)? = null
     ): List<File> = withContext(Dispatchers.IO) {
         val extractedFiles = mutableListOf<File>()
+        // Everything this call creates, in creation order, so a failed run can be
+        // undone without touching files that were already there.
+        val createdPaths = LinkedHashSet<File>()
 
         try {
-            destDir.mkdirs()
+            ensureDirectory(destDir, createdPaths)
             val canonicalDest = destDir.canonicalPath
+            // The separator matters: a sibling directory such as "filter-evil" also
+            // starts with the characters of "filter".
+            val canonicalDestPrefix = canonicalDest + File.separator
 
             Timber.d("Downloading ZIP from: $downloadUrl")
 
@@ -47,14 +55,26 @@ object ZipUtils {
             val tempZipFile = File(destDir, ".download.zip.tmp")
             try {
                 val response = client.get(downloadUrl)
+                if (response.status.value !in 200..299) {
+                    throw ZipExtractionException(
+                        "Unexpected HTTP ${response.status.value} downloading $downloadUrl"
+                    )
+                }
+                val contentLength = response.headers["Content-Length"]?.toLongOrNull() ?: -1L
                 val channel = response.bodyAsChannel()
 
                 FileOutputStream(tempZipFile).use { fos ->
                     val buffer = ByteArray(8 * 1024)
+                    var bytesDownloaded = 0L
                     while (!channel.isClosedForRead) {
                         val bytesRead = channel.readAvailable(buffer)
                         if (bytesRead > 0) {
                             fos.write(buffer, 0, bytesRead)
+                            bytesDownloaded += bytesRead
+                            if (contentLength > 0) {
+                                val percent = ((bytesDownloaded * 100) / contentLength).toInt().coerceIn(0, 100)
+                                onProgress?.invoke(percent)
+                            }
                         }
                     }
                 }
@@ -69,16 +89,17 @@ object ZipUtils {
                             val entryFile = File(destDir, entry.name)
 
                             // Zip-slip protection
-                            if (!entryFile.canonicalPath.startsWith(canonicalDest)) {
+                            if (!entryFile.canonicalPath.startsWith(canonicalDestPrefix)) {
                                 throw ZipExtractionException(
                                     "Zip-slip detected: ${entry.name}"
                                 )
                             }
 
                             if (entry.isDirectory) {
-                                entryFile.mkdirs()
+                                ensureDirectory(entryFile, createdPaths)
                             } else {
-                                entryFile.parentFile?.mkdirs()
+                                ensureDirectory(entryFile.parentFile, createdPaths)
+                                createdPaths.add(entryFile)
                                 BufferedOutputStream(FileOutputStream(entryFile)).use { bos ->
                                     val buf = ByteArray(4 * 1024)
                                     var len: Int
@@ -108,24 +129,36 @@ object ZipUtils {
             extractedFiles
         } catch (e: ZipExtractionException) {
             // Clean up on our custom exception
-            cleanupDir(destDir)
+            cleanupCreatedPaths(createdPaths)
             throw e
         } catch (e: Exception) {
             // Clean up on any unexpected error
-            cleanupDir(destDir)
+            cleanupCreatedPaths(createdPaths)
             Timber.e(e, "Failed to download/extract ZIP")
             throw ZipExtractionException("Extraction failed: ${e.message}", e)
         }
     }
 
-    private fun cleanupDir(dir: File) {
-        try {
-            if (dir.exists()) {
-                dir.deleteRecursively()
-                Timber.d("Cleaned up failed extraction directory: ${dir.absolutePath}")
+    /** Creates [dir] and any missing parent, recording what was newly created. */
+    private fun ensureDirectory(dir: File?, createdPaths: MutableSet<File>) {
+        if (dir == null || dir.isDirectory) return
+        generateSequence(dir) { it.parentFile }
+            .takeWhile { !it.exists() }
+            .toList()
+            .asReversed()
+            .forEach { if (it.mkdirs() || it.isDirectory) createdPaths.add(it) }
+    }
+
+    /** Undoes a failed extraction, newest path first, leaving pre-existing content alone. */
+    private fun cleanupCreatedPaths(createdPaths: Set<File>) {
+        createdPaths.toList().asReversed().forEach { path ->
+            try {
+                if (path.delete()) {
+                    Timber.d("Cleaned up after failed extraction: ${path.absolutePath}")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to clean up: ${path.absolutePath}")
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to clean up directory: ${dir.absolutePath}")
         }
     }
 }

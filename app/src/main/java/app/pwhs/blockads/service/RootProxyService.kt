@@ -156,29 +156,27 @@ class RootProxyService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val startedFromBoot = intent?.getBooleanExtra(EXTRA_STARTED_FROM_BOOT, false) ?: false
+        // Lockdown Mode: refuse stop/pause requests until the lockdown ends.
+        val isRootLock =
+            (intent?.action == ACTION_STOP || intent?.action == ACTION_PAUSE_1H) &&
+            kotlinx.coroutines.runBlocking { appPrefs.lockdownEnabled.first() }
 
         when (intent?.action) {
             ACTION_STOP -> {
-                serviceScope.launch {
-                    val isLocked = appPrefs.lockdownEnabled.first()
-                    if (isLocked) {
-                        Timber.w("Stop request ignored: Root Proxy is in Lockdown Mode.")
-                        return@launch
-                    }
+                if (isRootLock) {
+                    Timber.w("Stop request ignored: Root Proxy is in Lockdown Mode.")
+                } else {
                     stopProxy()
                 }
-                return START_STICKY
+                return START_NOT_STICKY
             }
             ACTION_PAUSE_1H -> {
-                serviceScope.launch {
-                    val isLocked = appPrefs.lockdownEnabled.first()
-                    if (isLocked) {
-                        Timber.w("Pause request ignored: Root Proxy is in Lockdown Mode.")
-                        return@launch
-                    }
+                if (isRootLock) {
+                    Timber.w("Pause request ignored: Root Proxy is in Lockdown Mode.")
+                } else {
                     pauseProxy()
                 }
-                return START_STICKY
+                return START_NOT_STICKY
             }
             ACTION_RESTART -> {
                 restartProxy()
@@ -202,12 +200,7 @@ class RootProxyService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
 
-        // On boot the su daemon (Magisk/KernelSU) can take well over the
-        // normal retry window to come up — allow a much longer budget.
-        retryManager = VpnRetryManager(
-            maxRetries = if (startedFromBoot) 30 else 10,
-            maxDelayMs = 60000L
-        )
+        retryManager = RootProxyStartup.retryManagerFor(startedFromBoot)
 
         serviceScope.launch {
             try {
@@ -224,11 +217,12 @@ class RootProxyService : Service() {
                 val primary = appPrefs.upstreamDns.first()
                 val fallback = appPrefs.fallbackDns.first()
                 val dohUrl = appPrefs.dohUrl.first()
+                val odohRelayUrl = appPrefs.odohRelayUrl.first()
                 val safeSearch = appPrefs.safeSearchEnabled.first()
                 val youtubeSafe = appPrefs.youtubeRestrictedMode.first()
                 val responseType = appPrefs.dnsResponseType.first()
 
-                goTunnelAdapter.configureDns(protocol, primary, fallback, dohUrl)
+                goTunnelAdapter.configureDns(protocol, primary, fallback, dohUrl, odohRelayUrl)
                 goTunnelAdapter.configureSafeSearch(safeSearch, youtubeSafe)
                 goTunnelAdapter.setBlockResponseType(responseType)
 
@@ -258,31 +252,13 @@ class RootProxyService : Service() {
 
                 // 3. Retry loop for Standalone mode and IPTables setup
                 // This is crucial on boot where Magisk `su` might take a few seconds to become available
-                var proxyStarted = false
-                while (!proxyStarted && retryManager.shouldRetry()) {
-                    // Recreate the libsu shell if a non-root one got cached
-                    // (happens when the first shell command ran before the
-                    // su daemon was ready — see #179). Without this, every
-                    // retry reuses the poisoned non-root shell and iptables
-                    // can never succeed.
-                    if (!IptablesManager.ensureRootShell()) {
-                        Timber.w("Root shell not available yet")
-                    } else {
-                        val engineStarted = goTunnelAdapter.startStandalone(port = 15353)
-                        if (engineStarted) {
-                            if (IptablesManager.setupRules(this@RootProxyService, whitelistUids = whitelistedUids)) {
-                                proxyStarted = true
-                            } else {
-                                goTunnelAdapter.stop() // stop engine if iptables fails
-                            }
-                        }
-                    }
-
-                    if (!proxyStarted && retryManager.shouldRetry()) {
-                         Timber.w("Root Proxy establishment failed, retrying... (${retryManager.getRetryCount()}/${retryManager.getMaxRetries()})")
-                         retryManager.waitForRetry()
-                    }
-                }
+                val proxyStarted = RootProxyStartup.establish(
+                    retryManager = { retryManager },
+                    ensureRootShell = IptablesManager::ensureRootShell,
+                    startEngine = { goTunnelAdapter.startStandalone(port = 15353) },
+                    setupRules = { IptablesManager.setupRules(this@RootProxyService, whitelistUids = whitelistedUids) },
+                    stopEngine = { goTunnelAdapter.stop() },
+                )
 
                 if (!proxyStarted) {
                     Timber.e("Failed to start Root Proxy after ${retryManager.getMaxRetries()} attempts")
@@ -302,6 +278,7 @@ class RootProxyService : Service() {
                 appNameResolver.startSnapshotter(serviceScope)
 
                 _state.value = VpnState.RUNNING
+                appPrefs.setVpnEnabled(true)
                 if (!preserveUptimeOnRestart || startTimestamp == 0L) {
                     startTimestamp = System.currentTimeMillis()
                 }
@@ -335,6 +312,9 @@ class RootProxyService : Service() {
         goTunnelAdapter.stop()
 
         _state.value = VpnState.STOPPED
+        serviceScope.launch {
+            appPrefs.setVpnEnabled(false)
+        }
         startTimestamp = 0L
         if (showPausedNotification) {
             stopForeground(STOP_FOREGROUND_DETACH)

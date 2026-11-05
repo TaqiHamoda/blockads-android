@@ -32,6 +32,13 @@ class AppearanceViewModel(
     val showBottomNavLabels: StateFlow<Boolean> = appPrefs.showBottomNavLabels
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val bottomNavSecondaryTab: StateFlow<String> = appPrefs.bottomNavSecondaryTab
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppPreferences.BOTTOM_NAV_TAB_AUTO)
+
+    fun setBottomNavSecondaryTab(tab: String) {
+        viewModelScope.launch { appPrefs.setBottomNavSecondaryTab(tab) }
+    }
+
     fun setShowBottomNavLabels(show: Boolean) {
         viewModelScope.launch { appPrefs.setShowBottomNavLabels(show) }
     }

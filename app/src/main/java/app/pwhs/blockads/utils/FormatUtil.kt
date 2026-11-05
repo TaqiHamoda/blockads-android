@@ -1,22 +1,9 @@
 package app.pwhs.blockads.utils
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FamilyRestroom
-import androidx.compose.material.icons.filled.GppGood
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import app.pwhs.blockads.R
-import app.pwhs.blockads.data.entities.ProtectionProfile
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import androidx.compose.runtime.remember
 
 fun formatCount(count: Int): String = when {
     count >= 1_000_000 -> String.format(Locale.getDefault(), "%.1fM", count / 1_000_000f)
@@ -59,6 +46,13 @@ fun formatDataSize(kilobytes: Long): String = when {
     else -> String.format(Locale.getDefault(), "%.1f GB", kilobytes / (1024f * 1024f))
 }
 
+fun formatSpeed(bytesPerSec: Long): String = when {
+    bytesPerSec < 1024 -> "$bytesPerSec B/s"
+    bytesPerSec < 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f KB/s", bytesPerSec / 1024f)
+    bytesPerSec < 1024 * 1024 * 1024 -> String.format(Locale.getDefault(), "%.1f MB/s", bytesPerSec / (1024f * 1024f))
+    else -> String.format(Locale.getDefault(), "%.1f GB/s", bytesPerSec / (1024f * 1024f * 1024f))
+}
+
 fun formatUptimeShort(ms: Long): String {
     if (ms <= 0) return "—"
     val totalSeconds = ms / 1000
@@ -82,38 +76,3 @@ val dayFormat: ThreadLocal<SimpleDateFormat?> = ThreadLocal.withInitial {
 
 fun formatTime(hour: Int, minute: Int): String =
     "${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}"
-
-@Composable
-fun formatDays(daysOfWeek: String): String {
-    val dayNames = listOf(
-        stringResource(R.string.profile_day_mon),
-        stringResource(R.string.profile_day_tue),
-        stringResource(R.string.profile_day_wed),
-        stringResource(R.string.profile_day_thu),
-        stringResource(R.string.profile_day_fri),
-        stringResource(R.string.profile_day_sat),
-        stringResource(R.string.profile_day_sun)
-    )
-    val days = remember(daysOfWeek) { daysOfWeek.split(",").mapNotNull { it.trim().toIntOrNull() } }
-    return if (days.size == 7) stringResource(R.string.profile_schedule_every_day)
-    else days.mapNotNull { if (it in 1..7) dayNames[it - 1] else null }.joinToString(", ")
-}
-
-fun profileIcon(type: String?): ImageVector = when (type) {
-    ProtectionProfile.TYPE_DEFAULT -> Icons.Default.GppGood
-    ProtectionProfile.TYPE_STRICT -> Icons.Default.Security
-    ProtectionProfile.TYPE_FAMILY -> Icons.Default.FamilyRestroom
-    ProtectionProfile.TYPE_STRICT_FAMILY -> Icons.Default.Shield
-    ProtectionProfile.TYPE_GAMING -> Icons.Default.SportsEsports
-    else -> Icons.Default.Tune
-}
-
-@Composable
-fun profileDescription(type: String): String = when (type) {
-    ProtectionProfile.TYPE_DEFAULT -> stringResource(R.string.profile_desc_default)
-    ProtectionProfile.TYPE_STRICT -> stringResource(R.string.profile_desc_strict)
-    ProtectionProfile.TYPE_FAMILY -> stringResource(R.string.profile_desc_family)
-    ProtectionProfile.TYPE_STRICT_FAMILY -> stringResource(R.string.profile_desc_strict_family)
-    ProtectionProfile.TYPE_GAMING -> stringResource(R.string.profile_desc_gaming)
-    else -> stringResource(R.string.profile_desc_custom)
-}

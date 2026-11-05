@@ -55,13 +55,22 @@ fun DnsProviderCard(
                         fontWeight = FontWeight.Bold
                     )
                     if (provider.dohUrl != null) {
+                        val badgeText = if (app.pwhs.blockads.utils.DnsStampParser.isStamp(provider.dohUrl)) {
+                            "SDNS"
+                        } else if (provider.dohUrl.startsWith("quic://", ignoreCase = true)) {
+                            "DoQ"
+                        } else if (provider.dohUrl.startsWith("h3://", ignoreCase = true)) {
+                            "DoH3"
+                        } else {
+                            stringResource(R.string.dns_doh_badge)
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             shape = RoundedCornerShape(4.dp)
                         ) {
                             Text(
-                                text = stringResource(R.string.dns_doh_badge),
+                                text = badgeText,
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )

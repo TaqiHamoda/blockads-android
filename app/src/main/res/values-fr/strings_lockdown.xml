@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="clear_device_owner_confirm_message">Êtes-vous sûr de vouloir supprimer les privilèges de propriétaire de l\'appareil ? Cela effacera toutes les règles d\'administration et permettra la désinstallation de l\'application.</string>
+    <string name="clear_device_owner_confirm_title">Supprimer les privilèges de propriétaire ?</string>
+    <string name="delete">Supprimer</string>
+    <string name="device_admin_description">Administrateur de l\'appareil pour appliquer la persistance et les restrictions de stratégie pour BlockAds.</string>
+    <string name="device_owner_cleared_success">Privilèges de propriétaire de l\'appareil supprimés</string>
+    <string name="device_owner_clear_failed">Échec de la suppression des privilèges de propriétaire de l\'appareil</string>
+    <string name="lockdown_duration_10m">10 minutes</string>
+    <string name="lockdown_duration_12h">12 heures</string>
+    <string name="lockdown_duration_1h">1 heure</string>
+    <string name="lockdown_duration_1m">1 minute</string>
+    <string name="lockdown_duration_24h">24 heures</string>
+    <string name="lockdown_duration_30m">30 minutes</string>
+    <string name="lockdown_duration_5m">5 minutes</string>
+    <string name="lockdown_duration_6h">6 heures</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d heure</item>
+        <item quantity="other">%1$d heures</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <string name="lockdown_screen_add_blacklist">Ajouter un site à la liste noire</string>
+    <string name="lockdown_screen_cancel">Annuler le refroidissement</string>
+    <string name="lockdown_screen_cancel_desc">L\'annulation réinitialisera le minuteur à sa durée totale.</string>
+    <string name="lockdown_screen_desc">Pour modifier vos paramètres ou désactiver le blocage des publicités, vous devez lancer le minuteur de refroidissement.</string>
+    <string name="lockdown_screen_duration">Durée du minuteur : %1$s</string>
+    <string name="lockdown_screen_start">Démarrer le minuteur de refroidissement</string>
+    <string name="lockdown_screen_title">BlockAds est verrouillé</string>
+    <string name="settings_device_owner_clear_owner">Supprimer le propriétaire de l\'appareil</string>
+    <string name="settings_device_owner_clear_owner_desc">Révoker les privilèges d\'administration de propriétaire de l\'appareil pour BlockAds.</string>
+    <string name="settings_device_owner_enforce_restrictions">Restrictions de l\'appareil</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Activer pour appliquer des restrictions au niveau de l\'application (bloquer les outils de développement, etc.). Désactiver pour les effacer.</string>
+    <string name="settings_device_owner_section_desc">Gérez les restrictions du propriétaire de l\'appareil. Visible uniquement car BlockAds est un propriétaire de l\'appareil.</string>
+    <string name="settings_device_owner_section_title">Contrôle du propriétaire de l\'appareil</string>
+    <string name="settings_lockdown_duration_desc">Temps que vous devez attendre pour déverrouiller l\'application</string>
+    <string name="settings_lockdown_duration_title">Durée du refroidissement</string>
+    <string name="settings_lockdown_mode_desc">Lorsqu\'il est activé, vous ne pouvez pas désactiver le VPN ni accéder aux paramètres sans attendre la fin du délai de refroidissement.</string>
+    <string name="settings_lockdown_mode_title">Mode de verrouillage VPN</string>
+    <string name="settings_lockdown_section_desc">Forcer un délai de refroidissement pour désactiver le blocage des publicités. Aide à prévenir les rechutes impulsives.</string>
+    <string name="settings_lockdown_section_title">Contrôle des impulsions et Verrouillage</string>
+</resources>

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.pwhs.blockads.R
+import app.pwhs.blockads.data.datastore.AppPreferences
+import app.pwhs.blockads.data.datastore.prefs.FilterPreferences
 import app.pwhs.blockads.data.entities.FilterList
 import app.pwhs.blockads.data.dao.FilterListDao
 import app.pwhs.blockads.data.repository.CustomFilterManager
@@ -12,6 +14,8 @@ import app.pwhs.blockads.service.AdBlockVpnService
 import app.pwhs.blockads.service.ServiceController
 import app.pwhs.blockads.ui.event.UiEvent
 import app.pwhs.blockads.ui.event.toast
+import app.pwhs.blockads.BuildConfig
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,13 +32,58 @@ class FilterSetupViewModel(
     private val filterListDao: FilterListDao,
     private val customFilterManager: CustomFilterManager,
     private val application: Application,
+    private val appPreferences: AppPreferences? = null
 ) : ViewModel() {
 
     val filterLists: StateFlow<List<FilterList>> = filterListDao.getAll()
+        .map { lists ->
+            if (BuildConfig.IS_STORE) {
+                lists.filter { !it.isBuiltIn }
+            } else {
+                lists
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val starredFilterUrls: StateFlow<Set<String>> = appPreferences?.filter?.starredFilterUrls
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+        ?: MutableStateFlow<Set<String>>(emptySet()).asStateFlow()
+
+    val filterBuildMode: StateFlow<String> = appPreferences?.filterBuildMode
+        ?.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppPreferences.BUILD_MODE_ONLINE)
+        ?: MutableStateFlow(AppPreferences.BUILD_MODE_ONLINE).asStateFlow()
+
+    val customFilterTags: StateFlow<Set<String>> = (appPreferences?.customFilterTags
+        ?: MutableStateFlow(FilterPreferences.DEFAULT_CUSTOM_TAGS))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterPreferences.DEFAULT_CUSTOM_TAGS)
+
+    private val _selectedTag = MutableStateFlow<String?>(null)
+    val selectedTag: StateFlow<String?> = _selectedTag.asStateFlow()
+
+    fun selectTag(tag: String?) {
+        _selectedTag.value = tag
+    }
+
+    fun createTag(tag: String) {
+        val trimmed = tag.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            appPreferences?.addCustomFilterTag(trimmed)
+            _selectedTag.value = trimmed
+        }
+    }
+
+    fun deleteTag(tag: String) {
+        viewModelScope.launch {
+            appPreferences?.removeCustomFilterTag(tag)
+            if (_selectedTag.value == tag) {
+                _selectedTag.value = null
+            }
+        }
+    }
 
     val filteredFilterLists: StateFlow<List<FilterList>> = combine(
         filterLists, _searchQuery
@@ -49,14 +98,31 @@ class FilterSetupViewModel(
     private val _isUpdatingFilter = MutableStateFlow(false)
     val isUpdatingFilter: StateFlow<Boolean> = _isUpdatingFilter.asStateFlow()
 
+    private val _updateProgress = MutableStateFlow<Int?>(null)
+    val updateProgress: StateFlow<Int?> = _updateProgress.asStateFlow()
+
     private val _isAddingCustomFilter = MutableStateFlow(false)
     val isAddingCustomFilter: StateFlow<Boolean> = _isAddingCustomFilter.asStateFlow()
+
+    private val _addFilterProgress = MutableStateFlow<Int?>(null)
+    val addFilterProgress: StateFlow<Int?> = _addFilterProgress.asStateFlow()
 
     private val _filterAddedEvent = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val filterAddedEvent: SharedFlow<Unit> = _filterAddedEvent.asSharedFlow()
 
     private val _events = MutableSharedFlow<UiEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
+
+    private val _supportErrorInfo = MutableStateFlow<app.pwhs.blockads.ui.common.SupportErrorInfo?>(null)
+    val supportErrorInfo: StateFlow<app.pwhs.blockads.ui.common.SupportErrorInfo?> = _supportErrorInfo.asStateFlow()
+
+    fun dismissSupportError() {
+        _supportErrorInfo.value = null
+    }
+
+    fun showSupportError(info: app.pwhs.blockads.ui.common.SupportErrorInfo) {
+        _supportErrorInfo.value = info
+    }
 
     init {
         viewModelScope.launch {
@@ -77,12 +143,28 @@ class FilterSetupViewModel(
         }
     }
 
-    fun addFilterList(name: String, url: String, buildLocally: Boolean = false) {
+    fun toggleStarredFilter(filter: FilterList) {
         viewModelScope.launch {
-            val trimmedUrl = url.trim()
+            appPreferences?.filter?.toggleStarredFilter(filter.url)
+        }
+    }
+
+    fun addFilterList(
+        name: String,
+        url: String,
+        category: String = FilterList.CATEGORY_AD,
+        buildLocally: Boolean = false
+    ) {
+        viewModelScope.launch {
+            val rawUrls = url.lines().map { it.trim() }.filter { it.isNotBlank() }
+            if (rawUrls.isEmpty()) {
+                _events.toast(R.string.filter_error_invalid_url)
+                return@launch
+            }
+            val combinedUrl = rawUrls.joinToString("\n")
 
             // Check duplicate
-            val existing = filterListDao.getByUrl(trimmedUrl)
+            val existing = filterListDao.getByUrl(combinedUrl) ?: filterListDao.getByOriginalUrl(combinedUrl)
             if (existing != null) {
                 _events.toast(R.string.filter_error_duplicate_url)
                 return@launch
@@ -90,13 +172,20 @@ class FilterSetupViewModel(
 
             if (buildLocally) {
                 // Enqueue WorkManager job — returns immediately, compiles in background
-                customFilterManager.enqueueLocalCompile(trimmedUrl, name.trim())
+                customFilterManager.enqueueLocalCompile(combinedUrl, name.trim(), category)
                 _events.toast(R.string.filter_compile_enqueued)
                 _filterAddedEvent.tryEmit(Unit)
             } else {
                 _isAddingCustomFilter.value = true
-                val result = customFilterManager.addCustomFilter(trimmedUrl, name.trim())
+                _addFilterProgress.value = 10
+                val result = customFilterManager.addCustomFilter(
+                    urls = rawUrls,
+                    displayName = name.trim(),
+                    category = category,
+                    onProgress = { p -> _addFilterProgress.value = p }
+                )
                 _isAddingCustomFilter.value = false
+                _addFilterProgress.value = null
 
                 result.fold(
                     onSuccess = { _ ->
@@ -107,8 +196,92 @@ class FilterSetupViewModel(
                         filterRepo.loadAllEnabledFilters()
                         ServiceController.requestRestart(application.applicationContext)
                     },
-                    onFailure = { _ ->
+                    onFailure = { error ->
                         _events.toast(R.string.filter_update_failed)
+                        val rawError = error.message.orEmpty()
+                        _supportErrorInfo.value = app.pwhs.blockads.ui.common.SupportErrorInfo(
+                            title = application.getString(R.string.support_error_filter_title),
+                            message = application.getString(R.string.support_error_filter_desc),
+                            details = "Filter: $name\nURLs: $combinedUrl\nError: $rawError",
+                            errorType = "CUSTOM_FILTER_ADD"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    fun editFilterList(
+        filter: FilterList,
+        name: String,
+        url: String,
+        category: String = filter.category,
+        buildLocally: Boolean
+    ) {
+        viewModelScope.launch {
+            val nameTrimmed = name.trim()
+            val urlTrimmed = url.trim()
+            if (nameTrimmed.isBlank() || urlTrimmed.isBlank()) {
+                _events.toast(R.string.filter_error_invalid_url)
+                return@launch
+            }
+
+            val isCurrentlyLocal = filter.trieUrl.startsWith("local://")
+            val rawExistingUrl = filter.originalUrl.ifEmpty { filter.url }
+            val urlChanged = urlTrimmed != rawExistingUrl.trim()
+            val modeChanged = isCurrentlyLocal != buildLocally
+
+            if (buildLocally) {
+                if (urlChanged || modeChanged) {
+                    customFilterManager.enqueueRecompileLocally(
+                        filter.copy(
+                            name = nameTrimmed,
+                            url = urlTrimmed,
+                            originalUrl = urlTrimmed,
+                            category = category
+                        )
+                    )
+                    _events.toast(R.string.filter_compile_enqueued)
+                } else {
+                    filterListDao.update(
+                        filter.copy(
+                            name = nameTrimmed,
+                            category = category,
+                            lastUpdated = System.currentTimeMillis()
+                        )
+                    )
+                    _events.toast(R.string.filter_updated, listOf(filter.ruleCount))
+                }
+                _filterAddedEvent.tryEmit(Unit)
+            } else {
+                _isAddingCustomFilter.value = true
+                _addFilterProgress.value = 10
+                val result = customFilterManager.editCustomFilter(
+                    filter = filter,
+                    newName = nameTrimmed,
+                    newUrl = urlTrimmed,
+                    newCategory = category,
+                    onProgress = { p -> _addFilterProgress.value = p }
+                )
+                _isAddingCustomFilter.value = false
+                _addFilterProgress.value = null
+
+                result.fold(
+                    onSuccess = { updated ->
+                        _events.toast(R.string.filter_updated, listOf(updated.ruleCount))
+                        _filterAddedEvent.tryEmit(Unit)
+                        filterRepo.loadAllEnabledFilters()
+                        ServiceController.requestRestart(application.applicationContext)
+                    },
+                    onFailure = { error ->
+                        _events.toast(R.string.filter_update_failed)
+                        val rawError = error.message.orEmpty()
+                        _supportErrorInfo.value = app.pwhs.blockads.ui.common.SupportErrorInfo(
+                            title = application.getString(R.string.support_error_filter_title),
+                            message = application.getString(R.string.support_error_filter_desc),
+                            details = "Filter: $nameTrimmed\nURLs: $urlTrimmed\nError: $rawError",
+                            errorType = "CUSTOM_FILTER_EDIT"
+                        )
                     }
                 )
             }
@@ -129,24 +302,33 @@ class FilterSetupViewModel(
     fun updateAllFilters() {
         viewModelScope.launch {
             _isUpdatingFilter.value = true
+            _updateProgress.value = 0
 
             var totalCount = 0
             var hasLocalFilters = false
 
-            // 1. Update remote built-in filters
-            val result = filterRepo.forceUpdateAllEnabledFilters()
+            val enabledBuiltIn = filterListDao.getEnabled().filter { it.isBuiltIn }
+            val customFilters = filterListDao.getAllNonBuiltIn().filter { it.isEnabled }
+            val totalSteps = (enabledBuiltIn.size + customFilters.size).coerceAtLeast(1)
+            var completedSteps = 0
+
+            // 1. Update remote built-in filters with per-filter progress
+            val result = filterRepo.forceUpdateAllEnabledFilters(
+                onProgress = { completed, _ ->
+                    completedSteps = completed
+                    _updateProgress.value = ((completedSteps * 100) / totalSteps).coerceIn(0, 100)
+                }
+            )
             result.onSuccess { count -> totalCount += count }
+            completedSteps = enabledBuiltIn.size
+            _updateProgress.value = ((completedSteps * 100) / totalSteps).coerceIn(0, 100)
 
             // 2. Update all enabled custom filters
-            val customFilters = filterListDao.getAllNonBuiltIn()
             for (filter in customFilters) {
-                if (!filter.isEnabled) continue
-
                 val isLocal = filter.trieUrl.startsWith("local://") &&
                         filter.bloomUrl.startsWith("local://")
 
                 if (isLocal) {
-                    // Enqueue WorkManager job for local filters
                     customFilterManager.enqueueRecompileLocally(filter)
                     hasLocalFilters = true
                 } else {
@@ -155,12 +337,15 @@ class FilterSetupViewModel(
                         totalCount += updatedFilter.ruleCount
                     }
                 }
+                completedSteps++
+                _updateProgress.value = (completedSteps * 100) / totalSteps
             }
 
             // Always reload engine in case any custom filters updated their binaries
             filterRepo.loadAllEnabledFilters()
 
             _isUpdatingFilter.value = false
+            _updateProgress.value = null
 
             if (hasLocalFilters) {
                 _events.toast(R.string.filter_compile_enqueued)
@@ -170,10 +355,8 @@ class FilterSetupViewModel(
                     R.string.filter_updated,
                     listOf(totalCount)
                 )
-            } else if (!hasLocalFilters) {
-                result.onFailure {
-                    _events.toast(R.string.filter_update_failed)
-                }
+            } else {
+                _events.toast(R.string.filter_update_failed)
             }
         }
     }

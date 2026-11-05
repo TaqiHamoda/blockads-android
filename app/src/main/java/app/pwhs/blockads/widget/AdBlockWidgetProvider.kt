@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.java.KoinJavaComponent.getKoin
+import timber.log.Timber
 
 class AdBlockWidgetProvider : AppWidgetProvider() {
 
@@ -44,10 +45,12 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
+        val statsUpdates = mutableListOf<suspend () -> Unit>()
         for (id in appWidgetIds) {
             val options = appWidgetManager.getAppWidgetOptions(id)
-            updateWidgetInternal(context, appWidgetManager, id, options)
+            updateWidgetInternal(context, appWidgetManager, id, options, statsUpdates)
         }
+        runStatsUpdates(statsUpdates)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -56,7 +59,9 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         newOptions: Bundle
     ) {
-        updateWidgetInternal(context, appWidgetManager, appWidgetId, newOptions)
+        val statsUpdates = mutableListOf<suspend () -> Unit>()
+        updateWidgetInternal(context, appWidgetManager, appWidgetId, newOptions, statsUpdates)
+        runStatsUpdates(statsUpdates)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -67,7 +72,8 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        options: Bundle
+        options: Bundle,
+        statsUpdates: MutableList<suspend () -> Unit>
     ) {
         val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
         val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
@@ -79,9 +85,32 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         val isRunning = AdBlockVpnService.isRunning || RootProxyService.isRunning
 
         if (isExpanded) {
-            updateExpanded(context, appWidgetManager, appWidgetId, isRunning)
+            updateExpanded(context, appWidgetManager, appWidgetId, isRunning, statsUpdates)
         } else {
             updateCollapsed(context, appWidgetManager, appWidgetId, isRunning)
+        }
+    }
+
+    /**
+     * Runs every pending stats load under a single broadcast pending result. A
+     * broadcast hands that result out once, so all widgets in one update share it,
+     * and a failing query must not escape the coroutine and kill the process.
+     */
+    private fun runStatsUpdates(statsUpdates: List<suspend () -> Unit>) {
+        if (statsUpdates.isEmpty()) return
+        val result = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                statsUpdates.forEach { update ->
+                    try {
+                        update()
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to load widget stats")
+                    }
+                }
+            } finally {
+                result?.finish()
+            }
         }
     }
 
@@ -122,7 +151,8 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
-        isRunning: Boolean
+        isRunning: Boolean,
+        statsUpdates: MutableList<suspend () -> Unit>
     ) {
         val views = RemoteViews(context.packageName, R.layout.widget_expanded)
 
@@ -152,22 +182,17 @@ class AdBlockWidgetProvider : AppWidgetProvider() {
         appWidgetManager.updateAppWidget(appWidgetId, views)
 
         // Load stats async
-        val result = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val dao: DnsLogDao = getKoin().get()
-                val blockedToday =
-                    dao.getBlockedCountSinceSync(startOfDayMillis())
+        statsUpdates.add {
+            val dao: DnsLogDao = getKoin().get()
+            val blockedToday =
+                dao.getBlockedCountSinceSync(startOfDayMillis())
 
-                views.setTextViewText(
-                    R.id.widget_blocked_count,
-                    blockedToday.toString()
-                )
+            views.setTextViewText(
+                R.id.widget_blocked_count,
+                blockedToday.toString()
+            )
 
-                appWidgetManager.updateAppWidget(appWidgetId, views)
-            } finally {
-                result.finish()
-            }
+            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
 

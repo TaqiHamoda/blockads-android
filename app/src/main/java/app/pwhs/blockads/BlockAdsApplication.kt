@@ -40,6 +40,7 @@ class BlockAdsApplication : Application() {
 
         // Schedule auto-update for filter lists after Koin is initialized
         val appPreferences: AppPreferences by inject()
+        val geoIpManager: app.pwhs.blockads.data.geoip.GeoIpManager by inject()
         applicationScope.launch {
             // Restore Crash Reporting state dynamically
             val isCrashReportingEnabled = appPreferences.crashReportingEnabled.first()
@@ -49,6 +50,9 @@ class BlockAdsApplication : Application() {
             appPreferences.migrateLegacyWgConfigIfNeeded()
 
             FilterUpdateScheduler.scheduleFilterUpdate(this@BlockAdsApplication, appPreferences)
+            app.pwhs.blockads.worker.ConfigUpdateScheduler.scheduleConfigUpdate(this@BlockAdsApplication, appPreferences)
+            app.pwhs.blockads.ui.browser.rules.BrowserRuleUpdateWorker.schedule(this@BlockAdsApplication)
+            app.pwhs.blockads.worker.GeoIpUpdateWorker.schedule(this@BlockAdsApplication)
 
             // Schedule daily summary only if enabled
             if (appPreferences.dailySummaryEnabled.first()) {
@@ -63,6 +67,14 @@ class BlockAdsApplication : Application() {
                     Timber.w("Device Owner restrictions enforcement failed on startup")
                     appPreferences.setDeviceOwnerRestrictionsEnabled(false)
                 }
+            }
+
+            // Warm up GeoIP database on IO thread
+            app.pwhs.blockads.data.geoip.GeoIpLookup.init(this@BlockAdsApplication)
+
+            // Fetch GeoIP database dynamically on fresh install if not present
+            if (!geoIpManager.isDatabaseAvailable()) {
+                geoIpManager.checkAndUpdate(force = false)
             }
         }
 

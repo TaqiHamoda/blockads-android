@@ -14,13 +14,19 @@ import androidx.lifecycle.viewModelScope
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.service.AdBlockVpnService
 import app.pwhs.blockads.service.ServiceController
+import app.pwhs.blockads.utils.CaCertHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
@@ -28,45 +34,7 @@ import org.koin.core.component.inject
 import timber.log.Timber
 import java.io.File
 
-// ── Data Classes ────────────────────────────────────────────────────────────
-
-/** Represents an installed browser detected on the device. */
-data class BrowserInfo(
-    val packageName: String,
-    val appName: String,
-    val uid: Int,
-    val icon: Drawable?,
-    val isSelected: Boolean = false
-)
-
-/** Certificate installation verification status. */
-enum class CertStatus {
-    /** Not yet checked. */
-    UNKNOWN,
-    /** Verification in progress. */
-    CHECKING,
-    /** Certificate is installed and working. */
-    INSTALLED,
-    /** Certificate is NOT installed or verification failed. */
-    NOT_INSTALLED
-}
-
-// ── Events ──────────────────────────────────────────────────────────────────
-
-sealed class HttpsFilteringEvent {
-    /** CA cert saved to Downloads — show manual install instructions. */
-    data class CaCertSavedToDownloads(val fileName: String) : HttpsFilteringEvent()
-
-    /** Fallback: cert saved to cache for legacy intent install. */
-    data class CaCertExportedLegacy(val certFile: File) : HttpsFilteringEvent()
-
-    data class Error(val message: String) : HttpsFilteringEvent()
-    data object ProxyStarted : HttpsFilteringEvent()
-    data object ProxyStopped : HttpsFilteringEvent()
-    /** WireGuard routing was turned off because HTTPS filtering was enabled. */
-    data object WireGuardDisabledForHttps : HttpsFilteringEvent()
-}
-
+// Models, CertStatus, and HttpsFilteringEvent are in HttpsFilteringContract.kt
 // ── ViewModel ───────────────────────────────────────────────────────────────
 
 class HttpsFilteringViewModel(
@@ -87,7 +55,7 @@ class HttpsFilteringViewModel(
     /** HTTP/3 (QUIC) filtering. Off = pages load fully (QUIC relayed);
      *  On = drop browser QUIC to force filterable TCP (more filtering,
      *  some sites may load partially). */
-    private val _filterHttp3 = MutableStateFlow(false)
+    private val _filterHttp3 = MutableStateFlow(true)
     val filterHttp3: StateFlow<Boolean> = _filterHttp3.asStateFlow()
 
     private val _browsers = MutableStateFlow<List<BrowserInfo>>(emptyList())
@@ -110,31 +78,47 @@ class HttpsFilteringViewModel(
     private val _events = MutableSharedFlow<HttpsFilteringEvent>()
     val events: SharedFlow<HttpsFilteringEvent> = _events.asSharedFlow()
 
+    val isProxyVpnActive: StateFlow<Boolean> = appPrefs.routingMode.map { mode ->
+        isProxyVpnRoutingMode(mode)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     init {
         loadState()
+        appPrefs.httpsFilteringEnabled.onEach { enabled ->
+            _isEnabled.value = enabled
+            if (!enabled) _isProxyRunning.value = false
+        }.launchIn(viewModelScope)
     }
+
+    private fun isProxyVpnRoutingMode(mode: String): Boolean =
+        mode == AppPreferences.ROUTING_MODE_PROXY_VPN ||
+            mode == AppPreferences.ROUTING_MODE_WIREGUARD ||
+            mode == AppPreferences.ROUTING_MODE_SHADOWSOCKS
 
     // ── Public API ───────────────────────────────────────────────────────
 
     /** Toggle HTTPS filtering on or off. */
     fun toggleEnabled(enabled: Boolean) {
         viewModelScope.launch {
+            if (enabled && isProxyVpnRoutingMode(appPrefs.getRoutingModeSnapshot())) {
+                _events.emit(HttpsFilteringEvent.ProxyVpnActiveConflict)
+                return@launch
+            }
+            if (enabled && _certStatus.value == CertStatus.NOT_INSTALLED) {
+                _events.emit(HttpsFilteringEvent.CertNotInstalled)
+                return@launch
+            }
             _isEnabled.value = enabled
             appPrefs.setHttpsFilteringEnabled(enabled)
 
             if (enabled) {
-                // HTTPS filtering and WireGuard routing are mutually
-                // exclusive: TcpIpStack terminates flows and dials the
-                // destination directly, bypassing the WG tunnel. Turn
-                // WG off so the user gets a single, working mode.
-                if (appPrefs.getRoutingModeSnapshot() == AppPreferences.ROUTING_MODE_WIREGUARD) {
-                    appPrefs.setRoutingMode(AppPreferences.ROUTING_MODE_DIRECT)
-                    _events.emit(HttpsFilteringEvent.WireGuardDisabledForHttps)
-                }
                 startProxy()
             } else {
                 stopProxy()
             }
+
+            // Restart VPN so the running engine picks up the new MITM setting
+            ServiceController.requestRestart(getApplication())
         }
     }
 
@@ -177,63 +161,38 @@ class HttpsFilteringViewModel(
     /**
      * Verify that the Root CA certificate has been installed correctly.
      *
-     * Checks the Android user trust store for a certificate matching our
-     * Root CA's subject DN. No network required — works even when VPN is off.
+     * Checks the Android trust store for a certificate matching our
+     * Root CA's byte encoding. Works for both User and System (Root) stores.
      */
-    fun verifyCert() {
+    fun verifyCert(showLoading: Boolean = false) {
         viewModelScope.launch {
-            _certStatus.value = CertStatus.CHECKING
+            if (showLoading || _certStatus.value == CertStatus.UNKNOWN) {
+                _certStatus.value = CertStatus.CHECKING
+            }
             val installed = withContext(Dispatchers.IO) { checkCertInTrustStore() }
             _certStatus.value = if (installed) CertStatus.INSTALLED else CertStatus.NOT_INSTALLED
         }
     }
 
     /**
-     * Checks if our Root CA is installed in the Android user trust store.
-     *
-     * Approach: Load the "AndroidCAStore" KeyStore, iterate all aliases,
-     * and compare each certificate's subject DN with our CA's subject DN.
+     * Checks if our Root CA is installed in the Android trust store (user or system).
      */
-    private fun checkCertInTrustStore(): Boolean {
-        try {
-            // Get our CA cert PEM
+    fun checkCertInTrustStore(): Boolean {
+        val caPem = ensureCaCertPem()
+        return CaCertHelper.checkCertInTrustStore(caPem)
+    }
+
+    private fun ensureCaCertPem(): String? {
+        var pem = _caCertPem.value
+        if (pem.isNullOrEmpty()) {
             val certDir = getApplication<Application>().filesDir.absolutePath
-            val caPem = engine.getMitmCACert(certDir)
-            if (caPem.isNullOrEmpty()) {
-                Timber.d("Cert verification: no CA cert generated yet")
-                return false
+            pem = engine.getMitmCACert(certDir)
+            if (pem.isNullOrEmpty()) {
+                pem = engine.startStackMitm(certDir)
             }
-
-            // Parse our CA cert
-            val certFactory = java.security.cert.CertificateFactory.getInstance("X.509")
-            val ourCert = certFactory.generateCertificate(
-                caPem.byteInputStream()
-            ) as java.security.cert.X509Certificate
-            val ourSubject = ourCert.subjectX500Principal
-
-            // Check Android user trust store
-            val ks = java.security.KeyStore.getInstance("AndroidCAStore")
-            ks.load(null)
-
-            for (alias in ks.aliases()) {
-                // User-installed certs have aliases starting with "user:"
-                if (!alias.startsWith("user:")) continue
-
-                val cert = ks.getCertificate(alias) as? java.security.cert.X509Certificate
-                    ?: continue
-
-                if (cert.subjectX500Principal == ourSubject) {
-                    Timber.d("Cert verification: found matching CA in trust store (alias=$alias)")
-                    return true
-                }
-            }
-
-            Timber.d("Cert verification: CA not found in user trust store")
-            return false
-        } catch (e: Exception) {
-            Timber.e(e, "Cert verification failed")
-            return false
+            if (!pem.isNullOrEmpty()) _caCertPem.value = pem
         }
+        return pem?.takeIf { it.isNotEmpty() }
     }
 
     /**
@@ -244,9 +203,9 @@ class HttpsFilteringViewModel(
      */
     fun exportCaCert() {
         viewModelScope.launch {
-            val pem = _caCertPem.value
-            if (pem.isNullOrEmpty()) {
-                _events.emit(HttpsFilteringEvent.Error("MITM proxy not running. Enable HTTPS filtering first."))
+            val pem = ensureCaCertPem()
+            if (pem == null) {
+                _events.emit(HttpsFilteringEvent.Error("Could not generate CA certificate."))
                 return@launch
             }
 
@@ -301,16 +260,7 @@ class HttpsFilteringViewModel(
     /**
      * Open Android Security Settings where user can install the certificate.
      */
-    fun createSecuritySettingsIntent(): Intent {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+: direct to "Install from storage"
-            Intent("android.settings.SECURITY_SETTINGS")
-        } else {
-            Intent("android.credentials.INSTALL").apply {
-                type = "application/x-x509-ca-cert"
-            }
-        }
-    }
+    fun createSecuritySettingsIntent(): Intent = CaCertHelper.createSecuritySettingsIntent()
 
     // ── Internal ─────────────────────────────────────────────────────────
 
@@ -331,7 +281,7 @@ class HttpsFilteringViewModel(
             val certDir = getApplication<Application>().filesDir.absolutePath
             val caCert = engine.getMitmCACert(certDir)
             if (!caCert.isNullOrEmpty()) {
-                _isProxyRunning.value = true
+                _isProxyRunning.value = enabled
                 _caCertPem.value = caCert
             }
 
@@ -342,21 +292,10 @@ class HttpsFilteringViewModel(
     private fun startProxy() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val certDir = getApplication<Application>().filesDir.absolutePath
-                engine.setUseTcpStack(true)
-                val caPem = engine.startStackMitm(certDir)
-                if (caPem.isNotEmpty()) {
+                val caPem = ensureCaCertPem()
+                if (!caPem.isNullOrEmpty()) {
                     _caCertPem.value = caPem
                     _isProxyRunning.value = true
-                    syncUidsToGoEngine(_browsers.value)
-                    try {
-                        val passthrough = getApplication<Application>().assets
-                            .open("https_passthrough.txt")
-                            .bufferedReader().use { it.readText() }
-                        engine.setExtraPassthroughSuffixes(passthrough)
-                    } catch (e: Exception) {
-                        Timber.w(e, "Failed to load https_passthrough.txt asset")
-                    }
                     _events.emit(HttpsFilteringEvent.ProxyStarted)
                     Timber.d("HTTPS filtering started (stack MITM)")
                 } else {
@@ -372,24 +311,12 @@ class HttpsFilteringViewModel(
     private fun stopProxy() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                engine.stopStackMitm()
-                engine.setUseTcpStack(false)
                 _isProxyRunning.value = false
-                _caCertPem.value = null
                 _events.emit(HttpsFilteringEvent.ProxyStopped)
                 Timber.d("HTTPS filtering stopped")
             } catch (e: Exception) {
                 Timber.e(e, "Error stopping HTTPS filtering")
             }
-        }
-    }
-
-    private fun syncUidsToGoEngine(browsers: List<BrowserInfo>) {
-        val selectedUids = browsers
-            .filter { it.isSelected }
-            .joinToString(",") { it.uid.toString() }
-        if (selectedUids.isNotEmpty()) {
-            engine.setMitmAllowedUIDs(selectedUids)
         }
     }
 
@@ -408,26 +335,42 @@ class HttpsFilteringViewModel(
         }
 
         // Load saved selected browsers from prefs
-        val savedSelected = appPrefs.getSelectedBrowsersSnapshot()
+        val savedSelected = appPrefs.getSelectedBrowsersOrNullSnapshot()
+        val curatedBrowsers = try {
+            getApplication<Application>().assets.open("preset/browsers.txt")
+                .bufferedReader()
+                .useLines { lines ->
+                    lines.map { it.trim() }
+                        .filter { it.isNotEmpty() && !it.startsWith("#") }
+                        .toSet()
+                }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to load preset/browsers.txt")
+            emptySet()
+        }
 
-        return activities
-            .mapNotNull { resolveInfo ->
-                val activityInfo = resolveInfo.activityInfo ?: return@mapNotNull null
-                val pkgName = activityInfo.packageName
+        val candidates = (activities.mapNotNull { it.activityInfo?.packageName } + curatedBrowsers).toSet()
+
+        return candidates
+            .mapNotNull { pkgName ->
                 try {
                     val appInfo = pm.getApplicationInfo(pkgName, 0)
+                    val isSelected = if (savedSelected == null) {
+                        pkgName in curatedBrowsers
+                    } else {
+                        pkgName in savedSelected
+                    }
                     BrowserInfo(
                         packageName = pkgName,
                         appName = pm.getApplicationLabel(appInfo).toString(),
                         uid = appInfo.uid,
                         icon = try { pm.getApplicationIcon(pkgName) } catch (_: Exception) { null },
-                        isSelected = pkgName in savedSelected
+                        isSelected = isSelected
                     )
                 } catch (_: PackageManager.NameNotFoundException) {
                     null
                 }
             }
-            .distinctBy { it.packageName }
             .sortedBy { it.appName }
     }
 

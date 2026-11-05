@@ -15,15 +15,28 @@ data class SettingsBackup(
     val safeSearchEnabled: Boolean = false,
     val youtubeRestrictedMode: Boolean = false,
     val dailySummaryEnabled: Boolean = true,
-    val milestoneNotificationsEnabled: Boolean = true,
+    val milestoneNotificationsEnabled: Boolean = false,
     val activeProfileType: String = "",
     val highContrast: Boolean = false,
     val firewallEnabled: Boolean = false,
     val filterLists: List<FilterListBackup> = emptyList(),
     val whitelistDomains: List<String> = emptyList(),
+    val blocklistDomains: List<String> = emptyList(),
     val whitelistedApps: List<String> = emptyList(),
     val customRules: List<String> = emptyList(),
-    val firewallRules: List<FirewallRuleBackup> = emptyList()
+    val firewallRules: List<FirewallRuleBackup> = emptyList(),
+    val configProfiles: List<ConfigProfileBackup> = emptyList()
+)
+
+@Serializable
+data class ConfigProfileBackup(
+    val name: String,
+    val content: String,
+    val remoteUrl: String? = null,
+    val autoUpdate: Boolean = false,
+    val isActive: Boolean = false,
+    val isBuiltIn: Boolean = false,
+    val icon: String? = null
 )
 
 @Serializable

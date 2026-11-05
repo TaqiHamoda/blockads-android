@@ -26,6 +26,7 @@ import ir.ehsannarmani.compose_charts.models.HorizontalIndicatorProperties
 import ir.ehsannarmani.compose_charts.models.LabelHelperProperties
 import ir.ehsannarmani.compose_charts.models.LabelProperties
 import ir.ehsannarmani.compose_charts.models.Line
+import ir.ehsannarmani.compose_charts.models.PopupProperties
 import java.util.Date
 
 @Composable
@@ -73,6 +74,7 @@ fun StatsChart(
         gridProperties = GridProperties(enabled = false),
         dividerProperties = DividerProperties(enabled = false),
         labelHelperProperties = LabelHelperProperties(enabled = false),
+        popupProperties = PopupProperties(enabled = false),
         animationDelay = 0,
     )
 }
@@ -122,6 +124,7 @@ fun DailyStatsChart(
         gridProperties = GridProperties(enabled = false),
         dividerProperties = DividerProperties(enabled = false),
         labelHelperProperties = LabelHelperProperties(enabled = false),
+        popupProperties = PopupProperties(enabled = false),
         animationDelay = 0,
     )
 }
@@ -172,6 +175,7 @@ fun WeeklyStatsChart(
         gridProperties = GridProperties(enabled = false),
         dividerProperties = DividerProperties(enabled = false),
         labelHelperProperties = LabelHelperProperties(enabled = false),
+        popupProperties = PopupProperties(enabled = false),
         animationDelay = 0,
     )
 }
@@ -222,6 +226,7 @@ fun MonthlyStatsChart(
         gridProperties = GridProperties(enabled = false),
         dividerProperties = DividerProperties(enabled = false),
         labelHelperProperties = LabelHelperProperties(enabled = false),
+        popupProperties = PopupProperties(enabled = false),
         animationDelay = 0,
     )
 }

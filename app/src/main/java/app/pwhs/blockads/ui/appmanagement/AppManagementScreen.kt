@@ -19,8 +19,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import app.pwhs.blockads.ui.component.AppListSkeleton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -218,13 +219,19 @@ fun AppManagementScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = filterOption == 0,
                     onClick = { filterOption = 0 },
-                    label = { Text(stringResource(R.string.filter_chip_all)) },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.app_management_filter_all),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -233,7 +240,13 @@ fun AppManagementScreen(
                 FilterChip(
                     selected = filterOption == 1,
                     onClick = { filterOption = 1 },
-                    label = { Text(stringResource(R.string.filter_chip_enabled)) },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.app_management_filter_protected),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -242,11 +255,33 @@ fun AppManagementScreen(
                 FilterChip(
                     selected = filterOption == 2,
                     onClick = { filterOption = 2 },
-                    label = { Text(stringResource(R.string.filter_chip_disabled)) },
+                    label = {
+                        Text(
+                            text = stringResource(R.string.app_management_filter_whitelisted),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = MaterialTheme.colorScheme.primary,
                         selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                     )
+                )
+            }
+
+            // Info notice
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.app_management_bypass_notice),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 )
             }
 
@@ -280,24 +315,7 @@ fun AppManagementScreen(
             }
 
             if (isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(40.dp),
-                            strokeWidth = 3.dp
-                        )
-                        Spacer(modifier = Modifier.size(12.dp))
-                        Text(
-                            text = stringResource(R.string.app_management_loading),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                    }
-                }
+                AppListSkeleton()
             } else {
                 HorizontalPager(
                     state = pagerState,
@@ -309,8 +327,8 @@ fun AppManagementScreen(
                     }
                     val filteredApps = remember(appsForPage, filterOption) {
                         when (filterOption) {
-                            1 -> appsForPage.filter { it.isWhitelisted }
-                            2 -> appsForPage.filter { !it.isWhitelisted }
+                            1 -> appsForPage.filter { !it.isWhitelisted }
+                            2 -> appsForPage.filter { it.isWhitelisted }
                             else -> appsForPage
                         }
                     }

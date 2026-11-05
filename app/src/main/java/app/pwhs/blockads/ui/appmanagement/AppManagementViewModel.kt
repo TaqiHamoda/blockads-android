@@ -53,11 +53,23 @@ class AppManagementViewModel(
         _searchQuery,
         _sortOption
     ) { installedApps, whitelisted, stats, query, sort ->
-        val statsByName = stats.associateBy { it.appName }
+        // Every row carries both the label and the package name, and the package
+        // name is what identifies the app: labels are not unique, so keying on them
+        // merged the stats of two apps that share one.
+        val statsByPackage = stats.associateBy { it.packageName }
+        // Only a row with no package identity of its own may be matched by label:
+        // the writer stores the friendly name in both fields when a UID owns no
+        // package, and history recorded before the column existed is blank.
+        // Anything else would leak one app's stats to another sharing its label.
+        val statsByLabel = stats
+            .filter {
+                it.packageName.isBlank() ||
+                    (it.packageName == it.appName && !it.packageName.contains("."))
+            }
+            .associateBy { it.appName }
 
         var result = installedApps.map { app ->
-            // AppNameResolver stores label (e.g. "Chrome"), fallback to package name
-            val stat = statsByName[app.label] ?: statsByName[app.packageName]
+            val stat = statsByPackage[app.packageName] ?: statsByLabel[app.label]
             app.copy(
                 totalQueries = stat?.totalQueries ?: 0,
                 blockedQueries = stat?.blockedQueries ?: 0,

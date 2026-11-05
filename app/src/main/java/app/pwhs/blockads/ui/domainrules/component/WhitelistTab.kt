@@ -2,6 +2,7 @@ package app.pwhs.blockads.ui.domainrules.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,12 +22,13 @@ import app.pwhs.blockads.ui.theme.TextSecondary
 @Composable
 fun WhitelistTab(
     domains: List<WhitelistDomain>,
-    onRemove: (WhitelistDomain) -> Unit
+    onToggle: (WhitelistDomain) -> Unit = {},
+    onRemove: (WhitelistDomain) -> Unit,
+    onEdit: (WhitelistDomain) -> Unit = {}
 ) {
     if (domains.isEmpty()) {
         EmptyState(stringResource(R.string.whitelist_domains_empty))
     } else {
-        // Domain count
         Column {
             Text(
                 text = "${domains.size} ${stringResource(R.string.settings_whitelist_domains).lowercase()}",
@@ -37,7 +39,7 @@ fun WhitelistTab(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                contentPadding = PaddingValues(
                     start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp
                 )
             ) {
@@ -53,7 +55,10 @@ fun WhitelistTab(
                             addedTimestamp = domain.addedTimestamp,
                             iconTint = MaterialTheme.colorScheme.secondary,
                             icon = Icons.Default.CheckCircle,
-                            onDelete = { onRemove(domain) }
+                            isEnabled = domain.isEnabled,
+                            onToggle = { onToggle(domain) },
+                            onDelete = { onRemove(domain) },
+                            onEdit = { onEdit(domain) }
                         )
                     }
                 }

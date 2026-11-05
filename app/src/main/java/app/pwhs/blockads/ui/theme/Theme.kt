@@ -28,6 +28,11 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = TextPrimary,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = TextSecondary,
+    surfaceContainerLowest = Color(0xFF0D1117),
+    surfaceContainerLow = Color(0xFF13171D),
+    surfaceContainer = Color(0xFF161B22),
+    surfaceContainerHigh = Color(0xFF21262D),
+    surfaceContainerHighest = Color(0xFF30363D),
     outline = TextTertiary,
     error = DangerRed,
     onError = Color.White
@@ -49,8 +54,39 @@ private val LightColorScheme = lightColorScheme(
     onSurface = LightTextPrimary,
     surfaceVariant = LightSurfaceVariant,
     onSurfaceVariant = LightTextSecondary,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF6F8FA),
+    surfaceContainer = Color(0xFFEFF2F5),
+    surfaceContainerHigh = Color(0xFFE6EAEF),
+    surfaceContainerHighest = Color(0xFFDDE3EA),
     outline = LightTextSecondary,
     error = DangerRedDim,
+    onError = Color.White
+)
+
+private val OledColorScheme = darkColorScheme(
+    primary = NeonGreen,
+    onPrimary = Color.Black,
+    primaryContainer = NeonGreenDim,
+    onPrimaryContainer = Color.White,
+    secondary = AccentBlue,
+    onSecondary = Color.Black,
+    secondaryContainer = AccentBlueDim,
+    onSecondaryContainer = Color.White,
+    tertiary = DangerRed,
+    background = Color.Black,
+    onBackground = TextPrimary,
+    surface = Color.Black,
+    onSurface = TextPrimary,
+    surfaceVariant = Color(0xFF121212),
+    onSurfaceVariant = TextSecondary,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color.Black,
+    surfaceContainer = Color(0xFF0A0A0A),
+    surfaceContainerHigh = Color(0xFF121212),
+    surfaceContainerHighest = Color(0xFF1E1E1E),
+    outline = Color(0xFF2E2E2E),
+    error = DangerRed,
     onError = Color.White
 )
 
@@ -89,22 +125,34 @@ fun BlockadsTheme(
     accentColor: String = AppPreferences.ACCENT_GREEN,
     content: @Composable () -> Unit
 ) {
+    val isOled = themeMode == AppPreferences.THEME_OLED
     val darkTheme = when (themeMode) {
-        "dark" -> true
-        "light" -> false
+        AppPreferences.THEME_OLED, AppPreferences.THEME_DARK -> true
+        AppPreferences.THEME_LIGHT -> false
         else -> isSystemInDarkTheme()
     }
+    val baseDarkScheme = if (isOled) OledColorScheme else DarkColorScheme
+
     val colorScheme = when {
         // Dynamic Color (Material You) — Android 12+
         accentColor == AppPreferences.ACCENT_DYNAMIC && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            val dynamic = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (isOled) {
+                dynamic.copy(
+                    background = Color.Black,
+                    surface = Color.Black,
+                    surfaceVariant = Color(0xFF121212)
+                )
+            } else {
+                dynamic
+            }
         }
         // Preset or custom accent colors
         accentColor != AppPreferences.ACCENT_GREEN && accentColor != AppPreferences.ACCENT_DYNAMIC -> {
             val (primary, primaryDim) = getAccentColors(accentColor)
             if (darkTheme) {
-                DarkColorScheme.copy(
+                baseDarkScheme.copy(
                     primary = primary,
                     primaryContainer = primaryDim
                 )
@@ -116,7 +164,7 @@ fun BlockadsTheme(
             }
         }
         // Default green
-        darkTheme -> DarkColorScheme
+        darkTheme -> baseDarkScheme
         else -> LightColorScheme
     }
 

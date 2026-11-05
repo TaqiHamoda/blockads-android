@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="clear_device_owner_confirm_message">Opravdu chcete odebrat oprávnění správce zařízení? Tím se zruší všechny administrativní zásady a bude možné aplikaci odinstalovat.</string>
+    <string name="clear_device_owner_confirm_title">Odebrat oprávnění správce zařízení?</string>
+    <string name="delete">Smazat</string>
+    <string name="device_admin_description">Správce zařízení k vynucení persistence a omezení zásad pro BlockAds.</string>
+    <string name="device_owner_cleared_success">Oprávnění správce zařízení byla odebrána</string>
+    <string name="device_owner_clear_failed">Odebrání oprávnění správce zařízení se nezdařilo</string>
+    <string name="lockdown_duration_10m">10 minut</string>
+    <string name="lockdown_duration_12h">12 hodin</string>
+    <string name="lockdown_duration_1h">1 hodina</string>
+    <string name="lockdown_duration_1m">1 minuta</string>
+    <string name="lockdown_duration_24h">24 hodin</string>
+    <string name="lockdown_duration_30m">30 minut</string>
+    <string name="lockdown_duration_5m">5 minut</string>
+    <string name="lockdown_duration_6h">6 hodin</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d hodina</item>
+        <item quantity="few">%1$d hodiny</item>
+        <item quantity="other">%1$d hodin</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d minuta</item>
+        <item quantity="few">%1$d minuty</item>
+        <item quantity="other">%1$d minut</item>
+    </plurals>
+    <string name="lockdown_screen_add_blacklist">Přidat web na černou listinu</string>
+    <string name="lockdown_screen_cancel">Zrušit uklidnění</string>
+    <string name="lockdown_screen_cancel_desc">Zrušením se časovač resetuje zpět na plnou dobu.</string>
+    <string name="lockdown_screen_desc">Chcete-li upravit nastavení nebo zakázat blokování reklam, musíte spustit časovač uklidnění.</string>
+    <string name="lockdown_screen_duration">Doba trvání časovače: %1$s</string>
+    <string name="lockdown_screen_start">Spustit časovač uklidnění</string>
+    <string name="lockdown_screen_title">BlockAds je uzamčen</string>
+    <string name="settings_device_owner_clear_owner">Odebrat správce zařízení</string>
+    <string name="settings_device_owner_clear_owner_desc">Odebrat administrativní oprávnění správce zařízení pro BlockAds.</string>
+    <string name="settings_device_owner_enforce_restrictions">Omezení zařízení</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Povolit pro uplatnění omezení na úrovni aplikace (blokování vývojářských nástrojů atd.). Zakázat pro jejich vymazání.</string>
+    <string name="settings_device_owner_section_desc">Správa omezení vlastníka zařízení. Viditelné pouze proto, že BlockAds je vlastník zařízení.</string>
+    <string name="settings_device_owner_section_title">Ovládání vlastníka zařízení</string>
+    <string name="settings_lockdown_duration_desc">Čas, který musíte počkat na odemknutí aplikace</string>
+    <string name="settings_lockdown_duration_title">Doba uklidnění</string>
+    <string name="settings_lockdown_mode_desc">Při povolení nemůžete vypnout VPN ani přistupovat k nastavení, dokud neuplyne časovač uklidnění.</string>
+    <string name="settings_lockdown_mode_title">Režim uzamčení VPN</string>
+    <string name="settings_lockdown_section_desc">Vynutit časovač uklidnění pro zakázání blokování reklam. Pomáhá předcházet impulzivním recidivám.</string>
+    <string name="settings_lockdown_section_title">Kontrola impulsů a uzamčení</string>
+</resources>

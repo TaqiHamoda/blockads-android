@@ -48,6 +48,7 @@ import app.pwhs.blockads.ui.theme.DangerRed
 import app.pwhs.blockads.ui.theme.TextSecondary
 import app.pwhs.blockads.ui.theme.WhitelistAmber
 import app.pwhs.blockads.utils.formatTimestamp
+import app.pwhs.blockads.utils.toDisplayInfo
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
 @Composable
@@ -63,6 +64,11 @@ fun LogEntryItem(
     onQuickBlock: () -> Unit = {},
     onQuickWhitelist: () -> Unit = {}
 ) {
+    val unknownLabel = stringResource(R.string.log_unknown_app)
+    val displayInfo = remember(entry, unknownLabel) {
+        entry.toDisplayInfo(unknownLabel)
+    }
+
     val statusColor by animateColorAsState(
         targetValue = when {
             isWhitelisted -> WhitelistAmber
@@ -125,7 +131,8 @@ fun LogEntryItem(
             val appIcon: Drawable? = remember(entry.packageName) {
                 if (entry.packageName.isNotEmpty() && entry.packageName.contains(".")) {
                     try {
-                        context.packageManager.getApplicationIcon(entry.packageName)
+                        val icon = context.packageManager.getApplicationIcon(entry.packageName)
+                        if (icon.intrinsicWidth > 0 && icon.intrinsicHeight > 0) icon else null
                     } catch (e: Exception) {
                         null
                     }
@@ -193,16 +200,16 @@ fun LogEntryItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = entry.domain,
+                    text = displayInfo.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onBackground
                 )
-                if (entry.appName.isNotEmpty()) {
+                if (displayInfo.displayAppName.isNotEmpty()) {
                     Text(
-                        text = entry.appName,
+                        text = displayInfo.displayAppName,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium,
                         maxLines = 1,
@@ -224,7 +231,7 @@ fun LogEntryItem(
                         color = TextSecondary
                     )
                     Text(
-                        text = entry.queryType,
+                        text = displayInfo.protocolOrType,
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary
                     )

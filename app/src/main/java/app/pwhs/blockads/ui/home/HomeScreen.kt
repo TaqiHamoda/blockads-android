@@ -1,7 +1,5 @@
 package app.pwhs.blockads.ui.home
 
-import android.graphics.drawable.Drawable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,12 +21,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.DataSaverOn
-import androidx.compose.material.icons.filled.GppGood
 import androidx.compose.material.icons.filled.QueryStats
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -51,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -64,22 +61,45 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pwhs.blockads.R
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.data.repository.FilterListRepository
-import app.pwhs.blockads.ui.home.component.DailyStatsChart
-import app.pwhs.blockads.ui.home.component.HomeAppBar
-import app.pwhs.blockads.ui.home.component.PowerButton
-import app.pwhs.blockads.ui.home.component.StatCard
-import app.pwhs.blockads.ui.home.component.StatsChart
+import app.pwhs.blockads.ui.home.data.RecentLogFilter
 import app.pwhs.blockads.ui.theme.AccentBlue
 import app.pwhs.blockads.ui.theme.DangerRed
 import app.pwhs.blockads.ui.theme.SecurityOrange
+import app.pwhs.blockads.ui.logs.data.LogFilterStatus
 import app.pwhs.blockads.ui.theme.TextSecondary
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import app.pwhs.blockads.ui.event.UiEventEffect
+import app.pwhs.blockads.ui.home.component.HomeActiveTipCard
+import app.pwhs.blockads.ui.home.component.HomeActivityChart
+import app.pwhs.blockads.ui.home.component.HomeAmbientBackground
+import app.pwhs.blockads.ui.home.component.HomeAppBar
+import app.pwhs.blockads.ui.home.component.HomeBlockRateCard
+import app.pwhs.blockads.ui.home.component.HomeBlockedDomainHandler
+import app.pwhs.blockads.ui.home.component.HomeFeatureTipType
+import app.pwhs.blockads.ui.home.component.HomeStatusHeader
+import app.pwhs.blockads.ui.home.component.MilestoneBottomSheet
+import app.pwhs.blockads.ui.home.component.MiniBarChartDefaults
+import app.pwhs.blockads.ui.home.component.NetworkSpeedSection
+import app.pwhs.blockads.ui.home.component.PowerButton
+import app.pwhs.blockads.ui.home.component.PrivateDnsWarningCard
+import app.pwhs.blockads.ui.home.component.RecentBlockedSection
+import app.pwhs.blockads.ui.home.component.RoutingModeBottomSheet
+import app.pwhs.blockads.ui.home.component.SelectedBlockedDomain
+import app.pwhs.blockads.ui.home.component.StatCard
+import app.pwhs.blockads.ui.home.component.TopBlockedSection
+import app.pwhs.blockads.ui.home.component.VpnRevokedWarningCard
+import app.pwhs.blockads.ui.home.component.isVisible
+import app.pwhs.blockads.ui.home.component.rememberHomeTipState
 import app.pwhs.blockads.utils.AppConstants.AVG_AD_SIZE_KB
 import app.pwhs.blockads.utils.VpnUtils
 import app.pwhs.blockads.utils.formatCount
 import app.pwhs.blockads.utils.formatDataSize
 import app.pwhs.blockads.utils.formatTimeSince
 import app.pwhs.blockads.utils.formatUptimeShort
-import app.pwhs.blockads.utils.profileIcon
 import com.google.accompanist.drawablepainter.rememberDrawablePainter
 import org.koin.androidx.compose.koinViewModel
 import java.util.Locale
@@ -92,8 +112,10 @@ fun HomeScreen(
     onRequestVpnPermission: () -> Unit,
     viewModel: HomeViewModel = koinViewModel(),
     onNavigateToStatisticsScreen: () -> Unit = {},
-    onNavigateToLogScreen: () -> Unit = {},
-    onNavigateToProfileScreen: () -> Unit = {},
+    onNavigateToLogScreen: (LogFilterStatus) -> Unit = {},
+    onNavigateToLogsWithQuery: (String) -> Unit = {},
+    onNavigateToBrowser: (String) -> Unit = {},
+    onNavigateToFeature: (HomeFeatureTipType) -> Unit = {},
 ) {
     val vpnEnabled by viewModel.vpnEnabled.collectAsStateWithLifecycle()
     val vpnConnecting by viewModel.vpnConnecting.collectAsStateWithLifecycle()
@@ -101,201 +123,108 @@ fun HomeScreen(
     val blockedCount by viewModel.blockedCount.collectAsStateWithLifecycle()
     val domainCount by viewModel.domainCount.collectAsStateWithLifecycle()
     val totalCount by viewModel.totalCount.collectAsStateWithLifecycle()
-    val securityThreatsBlocked by viewModel.securityThreatsBlocked.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val filterLoadFailed by viewModel.filterLoadFailed.collectAsStateWithLifecycle()
     val recentBlocked by viewModel.recentBlocked.collectAsStateWithLifecycle()
+    val recentFilter by viewModel.recentFilter.collectAsStateWithLifecycle()
     val hourlyStats by viewModel.hourlyStats.collectAsStateWithLifecycle()
     val dailyStats by viewModel.dailyStats.collectAsStateWithLifecycle()
+    val networkSpeed by viewModel.networkSpeed.collectAsStateWithLifecycle()
+    val milestoneReached by viewModel.milestoneReached.collectAsStateWithLifecycle()
     val topBlockedDomains by viewModel.topBlockedDomains.collectAsStateWithLifecycle()
     val protectionUptimeMs by viewModel.protectionUptimeMs.collectAsStateWithLifecycle()
-    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val securityFilterIds by viewModel.securityFilterIds.collectAsStateWithLifecycle()
+    val whitelistedDomains by viewModel.whitelistedDomains.collectAsStateWithLifecycle()
     val routingMode by viewModel.routingMode.collectAsStateWithLifecycle()
     val privateDnsWarning by viewModel.privateDnsWarning.collectAsStateWithLifecycle()
     val pausedByTrusted by viewModel.pausedByTrusted.collectAsStateWithLifecycle()
     val pausedTrustedSsid by viewModel.pausedTrustedSsid.collectAsStateWithLifecycle()
+    val vpnRevokedByAnotherApp by viewModel.vpnRevokedByAnotherApp.collectAsStateWithLifecycle()
     // Show the trusted-network paused state only while actually off.
     val showTrustedPause = pausedByTrusted && !vpnEnabled && !vpnConnecting && !vpnStopping
+    val showRevokedWarning = vpnRevokedByAnotherApp && !vpnEnabled && !vpnConnecting && !vpnStopping
     val context = LocalContext.current
+    var selectedBlockedDomain by remember { mutableStateOf<SelectedBlockedDomain?>(null) }
+    var showRoutingModeSheet by rememberSaveable { mutableStateOf(false) }
+
+    UiEventEffect(viewModel.events)
 
     LaunchedEffect(Unit) {
         viewModel.preloadFilter()
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            HomeAppBar(
-                isLoading = isLoading,
-                filterLoadFailed = filterLoadFailed,
-                viewModel = viewModel,
-                onNavigateToStatisticsScreen = onNavigateToStatisticsScreen,
-                onNavigateToLogScreen = onNavigateToLogScreen
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .verticalScroll(rememberScrollState())
-                .padding(innerPadding)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        HomeAmbientBackground(
+            vpnEnabled = vpnEnabled,
+            vpnConnecting = vpnConnecting,
+            vpnStopping = vpnStopping,
+            modifier = Modifier.fillMaxSize()
+        )
 
-            // Private DNS warning — DoT bypasses BlockAds filtering (#145)
-            if (privateDnsWarning) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.private_dns_warning_title),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.private_dns_warning_text),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                HomeAppBar(
+                    isLoading = isLoading,
+                    filterLoadFailed = filterLoadFailed,
+                    viewModel = viewModel,
+                    onNavigateToStatisticsScreen = onNavigateToStatisticsScreen,
+                    onNavigateToLogScreen = { onNavigateToLogScreen(LogFilterStatus.ALL) },
+                    onNavigateToBrowser = onNavigateToBrowser
+                )
             }
-
-            // Status text
-            Text(
-                text = when {
-                    vpnStopping -> stringResource(R.string.status_disconnecting)
-                    vpnConnecting -> stringResource(R.string.status_connecting)
-                    vpnEnabled -> stringResource(R.string.status_protected)
-                    showTrustedPause -> stringResource(R.string.status_paused)
-                    else -> stringResource(R.string.status_unprotected)
-                },
-                style = MaterialTheme.typography.headlineMedium,
-                color = when {
-                    vpnStopping -> SecurityOrange
-                    vpnConnecting -> AccentBlue
-                    vpnEnabled -> MaterialTheme.colorScheme.primary
-                    showTrustedPause -> SecurityOrange
-                    else -> DangerRed
-                },
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+        ) { innerPadding ->
             val isRootMode = routingMode == AppPreferences.ROUTING_MODE_ROOT
-            Text(
-                text = when {
-                    vpnStopping -> stringResource(if (isRootMode) R.string.home_disconnecting_desc_root else R.string.home_disconnecting_desc)
-                    vpnConnecting -> stringResource(if (isRootMode) R.string.home_connecting_desc_root else R.string.home_connecting_desc)
-                    vpnEnabled -> stringResource(R.string.home_protected_desc)
-                    showTrustedPause -> stringResource(R.string.home_paused_trusted_short)
-                    else -> stringResource(R.string.home_unprotected_desc)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
-                textAlign = TextAlign.Center,
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            if (showTrustedPause) {
-                // Trusted-network pill: shows which Wi-Fi paused BlockAds.
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Wifi,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = pausedTrustedSsid.ifEmpty { stringResource(R.string.trusted_networks_paused_title) },
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = when (routingMode) {
-                            AppPreferences.ROUTING_MODE_ROOT -> "Root Proxy Mode"
-                            AppPreferences.ROUTING_MODE_WIREGUARD -> "WireGuard Mode"
-                            else -> "Local VPN Mode"
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onNavigateToProfileScreen,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                ),
-                shape = RoundedCornerShape(8.dp)
+            val tipState = rememberHomeTipState(viewModel, routingMode, onNavigateToFeature)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = if (tipState.isVisible) 100.dp else 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = profileIcon(activeProfile?.profileType),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = activeProfile?.name ?: stringResource(R.string.profile_name_default),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Icon(
-                        painter = painterResource(R.drawable.ic_edit),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
+                    if (privateDnsWarning) {
+                        PrivateDnsWarningCard()
+                    }
+
+                    if (showRevokedWarning) {
+                        VpnRevokedWarningCard(
+                            onReconnect = {
+                                viewModel.dismissVpnRevokedWarning()
+                                if (!vpnConnecting && !vpnStopping) {
+                                    onRequestVpnPermission()
+                                }
+                            },
+                            onDismiss = {
+                                viewModel.dismissVpnRevokedWarning()
+                            }
+                        )
+                    }
+
+                    HomeStatusHeader(
+                        vpnStopping = vpnStopping,
+                        vpnConnecting = vpnConnecting,
+                        vpnEnabled = vpnEnabled,
+                        showTrustedPause = showTrustedPause,
+                        isRootMode = isRootMode,
+                        pausedTrustedSsid = pausedTrustedSsid,
+                        routingMode = routingMode,
+                        onRoutingModeClick = { showRoutingModeSheet = true }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
             val haptic = LocalHapticFeedback.current
             val isFirstVpnChange = remember { mutableStateOf(true) }
@@ -310,26 +239,28 @@ fun HomeScreen(
             // Power button — never blocked by filter loading
             PowerButton(
                 isActive = vpnEnabled,
-                isConnecting = vpnConnecting || vpnStopping,
+                isConnecting = vpnConnecting,
+                isStopping = vpnStopping,
                 onClick = {
                     if (!vpnConnecting && !vpnStopping) {
                         if (vpnEnabled) {
                             viewModel.stopVpn(context)
                         } else {
-                            if (!isRootMode && VpnUtils.isOtherVpnActive(context)) {
-                                onShowVpnConflictDialog()
-                            } else {
-                                onRequestVpnPermission()
-                            }
+                            viewModel.dismissVpnRevokedWarning()
+                            onRequestVpnPermission()
                         }
                     }
                 }
             )
 
             Spacer(modifier = Modifier.height(36.dp))
-
-
             // Stats cards
+            val totalChartData = remember(hourlyStats) {
+                MiniBarChartDefaults.createSparklineData(hourlyStats, isBlocked = false)
+            }
+            val blockedChartData = remember(hourlyStats) {
+                MiniBarChartDefaults.createSparklineData(hourlyStats, isBlocked = true)
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -343,7 +274,10 @@ fun HomeScreen(
                     icon = Icons.Default.QueryStats,
                     label = stringResource(R.string.total_queries),
                     value = formatCount(totalCount),
-                    color = MaterialTheme.colorScheme.secondary
+                    color = MaterialTheme.colorScheme.secondary,
+                    chartData = totalChartData,
+                    showChevron = true,
+                    onClick = { onNavigateToLogScreen(LogFilterStatus.ALL) }
                 )
                 StatCard(
                     modifier = Modifier
@@ -352,72 +286,27 @@ fun HomeScreen(
                     icon = Icons.Default.Block,
                     label = stringResource(R.string.blocked_queries),
                     value = formatCount(blockedCount),
-                    color = DangerRed
-                )
-                StatCard(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight(),
-                    icon = Icons.Default.GppGood,
-                    label = stringResource(R.string.home_security_threats),
-                    value = formatCount(securityThreatsBlocked),
-                    color = SecurityOrange
+                    color = DangerRed,
+                    chartData = blockedChartData,
+                    showChevron = true,
+                    onClick = { onNavigateToLogScreen(LogFilterStatus.BLOCKED) }
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             // Block rate + Data saved + Uptime card
-            val blockRate = if (totalCount > 0) (blockedCount * 100f / totalCount) else 0f
             val dataSavedKb = blockedCount * AVG_AD_SIZE_KB
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = stringResource(R.string.home_block_rate),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.home_block_rate),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextSecondary
-                        )
-                        Text(
-                            text = "${String.format(androidx.compose.ui.text.intl.Locale.current.platformLocale, "%.1f", blockRate)}%",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = stringResource(R.string.home_filter_rules),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                        Text(
-                            text = formatCount(domainCount),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
+            HomeBlockRateCard(
+                totalCount = totalCount,
+                blockedCount = blockedCount,
+                domainCount = domainCount
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Real-time network speed row
+            NetworkSpeedSection(networkSpeed = networkSpeed)
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -449,255 +338,115 @@ fun HomeScreen(
             }
 
             // Activity Chart with time range selector
-            if (hourlyStats.isNotEmpty() || dailyStats.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-
-                var selectedChartTab by rememberSaveable { mutableIntStateOf(0) }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = selectedChartTab == 0,
-                        onClick = { selectedChartTab = 0 },
-                        label = {
-                            Text(
-                                text = stringResource(R.string.home_chart_24h),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentBlue.copy(alpha = 0.2f),
-                            selectedLabelColor = AccentBlue
-                        )
-                    )
-                    FilterChip(
-                        selected = selectedChartTab == 1,
-                        onClick = { selectedChartTab = 1 },
-                        label = {
-                            Text(
-                                text = stringResource(R.string.home_chart_7d),
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentBlue.copy(alpha = 0.2f),
-                            selectedLabelColor = AccentBlue
-                        )
-                    )
-                }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    when (selectedChartTab) {
-                        0 -> {
-                            if (hourlyStats.isNotEmpty()) {
-                                StatsChart(
-                                    stats = hourlyStats,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp)
-                                        .padding(16.dp)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.home_chart_no_data),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                        }
-
-                        1 -> {
-                            if (dailyStats.isNotEmpty()) {
-                                DailyStatsChart(
-                                    stats = dailyStats,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp)
-                                        .padding(16.dp)
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(180.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.home_chart_no_data),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = TextSecondary
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            HomeActivityChart(
+                hourlyStats = hourlyStats,
+                dailyStats = dailyStats
+            )
 
             // Top blocked domains
-            if (topBlockedDomains.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = stringResource(R.string.home_top_blocked),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, bottom = 8.dp)
-                )
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        topBlockedDomains.forEachIndexed { index, entry ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "${index + 1}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = TextSecondary,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.width(24.dp)
-                                )
-                                Text(
-                                    text = entry.domain,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = formatCount(entry.count),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = DangerRed,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
+            TopBlockedSection(
+                topBlockedDomains = topBlockedDomains,
+                onDomainClick = { entry ->
+                    selectedBlockedDomain = SelectedBlockedDomain(
+                        domain = entry.domain,
+                        count = entry.count
+                    )
                 }
-            }
+            )
 
             // Recent blocked domains
-            if (recentBlocked.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Text(
-                    text = stringResource(R.string.home_recent_blocked),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 4.dp, bottom = 8.dp)
-                )
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        recentBlocked.forEach { entry ->
-                            val blockedByIds = entry.blockedBy.split(",")
-                            val dotColor =
-                                if (blockedByIds.any { it == FilterListRepository.BLOCK_REASON_SECURITY || securityFilterIds.contains(it) })
-                                    SecurityOrange else DangerRed
-                            val recentAppIcon: Drawable? = remember(entry.packageName) {
-                                if (entry.packageName.isNotEmpty() && entry.packageName.contains(".")) {
-                                    try {
-                                        context.packageManager.getApplicationIcon(entry.packageName)
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-                                } else null
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                if (recentAppIcon != null) {
-                                    Image(
-                                        painter = rememberDrawablePainter(drawable = recentAppIcon),
-                                        contentDescription = entry.appName,
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .clip(RoundedCornerShape(4.dp))
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(dotColor)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = entry.domain,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onBackground,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    if (entry.appName.isNotEmpty()) {
-                                        Text(
-                                            text = entry.appName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = formatTimeSince(entry.timestamp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
-                    }
+            RecentBlockedSection(
+                recentBlocked = recentBlocked,
+                securityFilterIds = securityFilterIds,
+                currentFilter = recentFilter,
+                onFilterChange = { viewModel.setRecentFilter(it) },
+                onViewAllClick = { onNavigateToLogScreen(LogFilterStatus.ALL) },
+                onEntryClick = { entry ->
+                    selectedBlockedDomain = SelectedBlockedDomain(
+                        domain = entry.domain,
+                        appName = entry.appName,
+                        packageName = entry.packageName,
+                        blockedBy = entry.blockedBy,
+                        isBlocked = entry.isBlocked
+                    )
                 }
-            }
+            )
 
-            Spacer(modifier = Modifier.height(200.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
+        AnimatedVisibility(
+            visible = tipState.isVisible,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            HomeActiveTipCard(tipState = tipState)
+        }
+        }
+
+        milestoneReached?.let { milestone ->
+            MilestoneBottomSheet(
+                milestone = milestone,
+                onDismiss = { viewModel.dismissMilestoneDialog(milestone) }
+            )
+        }
+
+        selectedBlockedDomain?.let { target ->
+            val isWhitelisted = whitelistedDomains.contains(target.domain.lowercase())
+            HomeBlockedDomainHandler(
+                target = target,
+                isWhitelisted = isWhitelisted,
+                onDismiss = { selectedBlockedDomain = null },
+                onToggleWhitelist = {
+                    if (isWhitelisted) viewModel.removeFromWhitelist(target.domain)
+                    else viewModel.addToWhitelist(target.domain)
+                    selectedBlockedDomain = null
+                },
+                onAddWildcardWhitelist = {
+                    viewModel.addWildcardWhitelist(target.domain)
+                    selectedBlockedDomain = null
+                },
+                onAddToCustomBlockRules = {
+                    viewModel.addToCustomBlockRules(target.domain)
+                    selectedBlockedDomain = null
+                },
+                onViewInLogs = {
+                    selectedBlockedDomain = null
+                    onNavigateToLogsWithQuery(target.domain)
+                }
+            )
+        }
+
+        if (showRoutingModeSheet) {
+            val isRootAvailable by viewModel.isRootAvailable.collectAsStateWithLifecycle()
+            val activeWgProfile by viewModel.activeWgProfile.collectAsStateWithLifecycle()
+            val activeProxyProfile by viewModel.activeProxyProfile.collectAsStateWithLifecycle()
+            val activeSsProfile by viewModel.activeSsProfile.collectAsStateWithLifecycle()
+            val activeProxyType by viewModel.activeProxyType.collectAsStateWithLifecycle()
+
+            RoutingModeBottomSheet(
+                currentMode = routingMode,
+                isRootAvailable = isRootAvailable,
+                activeWgProfile = activeWgProfile,
+                activeProxyProfile = activeProxyProfile,
+                activeSsProfile = activeSsProfile,
+                activeProxyType = activeProxyType,
+                onSelectMode = { mode ->
+                    viewModel.setRoutingMode(mode)
+                    showRoutingModeSheet = false
+                },
+                onConfigureProxyVpn = {
+                    showRoutingModeSheet = false
+                    onNavigateToFeature(HomeFeatureTipType.WIREGUARD)
+                },
+                onDismiss = { showRoutingModeSheet = false }
+            )
+        }
+
+        app.pwhs.blockads.ui.home.component.HomeRateAppPrompt(blockedCount = blockedCount)
     }
+}
 }

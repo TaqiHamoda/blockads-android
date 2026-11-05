@@ -2,8 +2,8 @@ package app.pwhs.blockads.di
 
 import app.pwhs.blockads.BuildConfig
 import app.pwhs.blockads.data.AppDatabase
+import app.pwhs.blockads.data.dao.FirewallRuleDao
 import app.pwhs.blockads.data.datastore.AppPreferences
-import app.pwhs.blockads.data.entities.ProfileManager
 import app.pwhs.blockads.data.remote.FilterDownloadManager
 import app.pwhs.blockads.data.remote.api.CustomFilterApi
 import app.pwhs.blockads.data.repository.CustomFilterManager
@@ -14,20 +14,19 @@ import app.pwhs.blockads.ui.filter.FilterSetupViewModel
 import app.pwhs.blockads.ui.home.HomeViewModel
 import app.pwhs.blockads.ui.logs.LogViewModel
 import app.pwhs.blockads.ui.onboarding.OnboardingViewModel
-import app.pwhs.blockads.ui.profile.ProfileViewModel
 import app.pwhs.blockads.ui.appearance.AppearanceViewModel
 import app.pwhs.blockads.ui.settings.SettingsViewModel
 import app.pwhs.blockads.ui.statistics.StatisticsViewModel
-import app.pwhs.blockads.ui.whitelist.AppWhitelistViewModel
 import app.pwhs.blockads.ui.appmanagement.AppManagementViewModel
-import app.pwhs.blockads.ui.customrules.CustomRulesViewModel
 import app.pwhs.blockads.ui.domainrules.DomainRulesViewModel
 import app.pwhs.blockads.ui.LockdownViewModel
 import app.pwhs.blockads.ui.firewall.FirewallViewModel
 import app.pwhs.blockads.ui.splash.SplashViewModel
 import app.pwhs.blockads.ui.wireguard.WireGuardEditViewModel
 import app.pwhs.blockads.ui.wireguard.WireGuardImportViewModel
+import app.pwhs.blockads.ui.proxyvpn.ProxyVpnViewModel
 import app.pwhs.blockads.ui.httpsfiltering.HttpsFilteringViewModel
+import app.pwhs.blockads.ui.httpsfiltering.wizard.CertInstallationWizardViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.cio.endpoint
@@ -67,6 +66,8 @@ val appModule = module {
                 requestTimeoutMillis = 60_000
                 connectTimeoutMillis = 30_000
             }
+
+            install(io.ktor.client.plugins.websocket.WebSockets)
         }
     }
 
@@ -79,8 +80,9 @@ val appModule = module {
     single { get<AppDatabase>().whitelistDomainDao() }
     single { get<AppDatabase>().dnsErrorDao() }
     single { get<AppDatabase>().customDnsRuleDao() }
-    single { get<AppDatabase>().protectionProfileDao() }
+    single { get<AppDatabase>().configDao() }
     single { get<AppDatabase>().firewallRuleDao() }
+    single { get<AppDatabase>().elementRuleDao() }
 
     // Preferences
     single { AppPreferences(androidContext()) }
@@ -107,27 +109,41 @@ val appModule = module {
         )
     }
 
-    // Profile Manager
+    // Browser Dynamic Rules & Search Suggestions
+    single { app.pwhs.blockads.ui.browser.rules.BrowserRuleStorage(androidContext()) }
+    single<app.pwhs.blockads.ui.browser.rules.BrowserRuleRepository> {
+        app.pwhs.blockads.ui.browser.rules.BrowserRuleRepositoryImpl(
+            storage = get(),
+            client = get()
+        )
+    }
+    single<app.pwhs.blockads.ui.browser.data.SearchSuggestionRepository> {
+        app.pwhs.blockads.ui.browser.data.SearchSuggestionRepositoryImpl(
+            client = get()
+        )
+    }
+
+    // GeoIP Database Manager
     single {
-        ProfileManager(
-            profileDao = get(),
-            filterListDao = get(),
-            appPrefs = get(),
-            filterRepo = get()
+        app.pwhs.blockads.data.geoip.GeoIpManager(
+            context = androidContext(),
+            client = get()
         )
     }
 
     // ViewModels
     viewModel {
         HomeViewModel(
+            context = androidContext(),
             appPrefs = get(),
             dnsLogDao = get(),
             filterRepo = get(),
-            profileDao = get(),
-            filterListDao = get()
+            filterListDao = get(),
+            whitelistDomainDao = get(),
+            customDnsRuleDao = get()
         )
     }
-    viewModel { StatisticsViewModel(dnsLogDao = get()) }
+    viewModel { StatisticsViewModel(dnsLogDao = get(), filterListDao = get()) }
     viewModel {
         LogViewModel(
             dnsLogDao = get(),
@@ -136,7 +152,20 @@ val appModule = module {
             customDnsRuleDao = get(),
             filterListRepository = get(),
             appPrefs = get(),
-            application = androidApplication()
+            application = androidApplication(),
+            firewallRuleDao = get()
+        )
+    }
+    single {
+        app.pwhs.blockads.utils.SettingsBackupManager(
+            context = androidApplication(),
+            appPrefs = get(),
+            filterListDao = get(),
+            whitelistDomainDao = get(),
+            customDnsRuleDao = get(),
+            firewallRuleDao = get(),
+            configDao = get(),
+            filterRepo = get()
         )
     }
     viewModel {
@@ -147,9 +176,8 @@ val appModule = module {
             whitelistDomainDao = get(),
             filterListDao = get(),
             customDnsRuleDao = get(),
-            profileDao = get(),
-            profileManager = get(),
             firewallRuleDao = get(),
+            backupManager = get(),
             application = androidApplication()
         )
     }
@@ -158,7 +186,8 @@ val appModule = module {
             filterRepo = get(),
             filterListDao = get(),
             customFilterManager = get(),
-            application = androidApplication()
+            application = androidApplication(),
+            appPreferences = get()
         )
     }
     viewModel { (filterId: Long) ->
@@ -172,21 +201,8 @@ val appModule = module {
         )
     }
     viewModel {
-        AppWhitelistViewModel(
-            appPrefs = get(),
-            application = androidApplication()
-        )
-    }
-    viewModel {
         app.pwhs.blockads.ui.trustednetworks.TrustedNetworksViewModel(
             appPrefs = get(),
-            application = androidApplication()
-        )
-    }
-    viewModel {
-        CustomRulesViewModel(
-            customDnsRuleDao = get(),
-            filterListRepository = get(),
             application = androidApplication()
         )
     }
@@ -206,14 +222,6 @@ val appModule = module {
     viewModel {
         OnboardingViewModel(
             appPrefs = get(),
-            application = androidApplication()
-        )
-    }
-    viewModel {
-        ProfileViewModel(
-            profileManager = get(),
-            profileDao = get(),
-            filterListDao = get(),
             application = androidApplication()
         )
     }
@@ -239,6 +247,7 @@ val appModule = module {
         DomainRulesViewModel(
             whitelistDomainDao = get(),
             customDnsRuleDao = get(),
+            filterRepo = get(),
             application = androidApplication()
         )
     }
@@ -254,12 +263,73 @@ val appModule = module {
         )
     }
     viewModel {
+        ProxyVpnViewModel(
+            application = androidApplication()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.vpnsettings.VpnSettingsViewModel(
+            application = androidApplication(),
+            appPrefs = get()
+        )
+    }
+    viewModel {
         WireGuardEditViewModel(
             application = androidApplication()
         )
     }
     viewModel {
+        app.pwhs.blockads.ui.proxyvpn.edit.ProxyEditViewModel(
+            application = androidApplication(),
+            appPrefs = get()
+        )
+    }
+    viewModel {
         HttpsFilteringViewModel(
+            application = androidApplication()
+        )
+    }
+    viewModel {
+        CertInstallationWizardViewModel(
+            application = androidApplication()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.browser.BrowserViewModel(
+            application = androidApplication(),
+            ruleRepository = get(),
+            suggestionRepository = get(),
+            elementRuleDao = get()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.browser.elementrules.ElementRulesViewModel(
+            application = androidApplication(),
+            elementRuleDao = get()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.settings.geoip.GeoIpViewModel(
+            application = androidApplication(),
+            geoIpManager = get(),
+            appPreferences = get()
+        )
+    }
+
+    // DNS Leak Test
+    single<app.pwhs.blockads.data.repository.DnsLeakRepository> {
+        app.pwhs.blockads.data.repository.DnsLeakRepositoryImpl(
+            client = get(),
+            appPrefs = get(),
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.dnsprovider.leak.DnsLeakTestViewModel(
+            dnsLeakRepository = get()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.tailscale.TailscaleViewModel(
             application = androidApplication()
         )
     }

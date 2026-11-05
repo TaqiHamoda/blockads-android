@@ -2,6 +2,12 @@ package app.pwhs.blockads.ui
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
@@ -12,31 +18,40 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import app.pwhs.blockads.BuildConfig
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.ui.about.AboutScreen
 import app.pwhs.blockads.ui.appearance.AppearanceScreen
 import app.pwhs.blockads.ui.appmanagement.AppManagementScreen
-import app.pwhs.blockads.ui.customrules.CustomRulesScreen
 import app.pwhs.blockads.ui.data.AboutKey
 import app.pwhs.blockads.ui.data.AppManagementKey
 import app.pwhs.blockads.ui.data.AppearanceKey
+import app.pwhs.blockads.ui.browser.BrowserActivity
+import app.pwhs.blockads.ui.browser.BrowserScreen
+import app.pwhs.blockads.ui.browser.elementrules.ElementRulesScreen
 import app.pwhs.blockads.ui.data.BottomBarScreen
-import app.pwhs.blockads.ui.data.CustomRuleKey
+import app.pwhs.blockads.ui.data.BrowserKey
+import app.pwhs.blockads.ui.data.ElementRulesKey
 import app.pwhs.blockads.ui.data.DnsProviderKey
 import app.pwhs.blockads.ui.data.DomainRulesKey
 import app.pwhs.blockads.ui.data.FilterDetailKey
@@ -44,28 +59,36 @@ import app.pwhs.blockads.ui.data.FilterKey
 import app.pwhs.blockads.ui.data.FireWallKey
 import app.pwhs.blockads.ui.data.HomeKey
 import app.pwhs.blockads.ui.data.HttpsFilteringKey
+import app.pwhs.blockads.ui.data.CertInstallationWizardKey
+import app.pwhs.blockads.ui.data.GeoIpKey
+import app.pwhs.blockads.ui.httpsfiltering.wizard.CertInstallationWizardScreen
+import app.pwhs.blockads.ui.settings.geoip.GeoIpScreen
 import app.pwhs.blockads.ui.data.LogsKey
-import app.pwhs.blockads.ui.data.ProfileKey
 import app.pwhs.blockads.ui.data.SettingsKey
 import app.pwhs.blockads.ui.data.StatisticsKey
-import app.pwhs.blockads.ui.data.WhiteListAppKey
 import app.pwhs.blockads.ui.data.TrustedNetworksKey
 import app.pwhs.blockads.ui.data.WireGuardEditKey
+import app.pwhs.blockads.ui.data.ProxyVpnKey
+import app.pwhs.blockads.ui.data.ProxyEditKey
+import app.pwhs.blockads.ui.data.VpnSettingsKey
 import app.pwhs.blockads.ui.data.WireGuardImportKey
+import app.pwhs.blockads.ui.data.TailscaleKey
+import app.pwhs.blockads.ui.tailscale.TailscaleScreen
+import app.pwhs.blockads.ui.proxyvpn.edit.ProxyEditScreen
 import app.pwhs.blockads.ui.dnsprovider.DnsProviderScreen
 import app.pwhs.blockads.ui.domainrules.DomainRulesScreen
 import app.pwhs.blockads.ui.filter.FilterSetupScreen
 import app.pwhs.blockads.ui.filter.detail.FilterDetailScreen
 import app.pwhs.blockads.ui.firewall.FirewallScreen
 import app.pwhs.blockads.ui.home.HomeScreen
+import app.pwhs.blockads.ui.home.component.HomeFeatureTipType
 import app.pwhs.blockads.ui.httpsfiltering.HttpsFilteringScreen
 import app.pwhs.blockads.ui.logs.LogsScreen
-import app.pwhs.blockads.ui.profile.ProfileScreen
 import app.pwhs.blockads.ui.settings.SettingsScreen
 import app.pwhs.blockads.ui.statistics.StatisticsScreen
-import app.pwhs.blockads.ui.whitelist.AppWhitelistScreen
 import app.pwhs.blockads.ui.wireguard.WireGuardEditScreen
-import app.pwhs.blockads.ui.wireguard.WireGuardImportScreen
+import app.pwhs.blockads.ui.proxyvpn.ProxyVpnScreen
+import app.pwhs.blockads.ui.vpnsettings.VpnSettingsScreen
 import org.koin.compose.koinInject
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -74,12 +97,20 @@ fun HomeApp(
     onRequestVpnPermission: () -> Unit = {},
     onShowVpnConflictDialog: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val appPrefs: AppPreferences = koinInject()
     val showBottomNavLabels by appPrefs.showBottomNavLabels.collectAsStateWithLifecycle(
         initialValue = true,
     )
+    val firewallEnabled by appPrefs.firewallEnabled.collectAsStateWithLifecycle(
+        initialValue = false,
+    )
+    val secondaryTab by appPrefs.bottomNavSecondaryTab.collectAsStateWithLifecycle(
+        initialValue = AppPreferences.BOTTOM_NAV_TAB_AUTO,
+    )
     val homeStack = rememberNavBackStack(HomeKey)
     val filterStack = rememberNavBackStack(FilterKey)
+    val wireguardStack = rememberNavBackStack(ProxyVpnKey)
     val firewallStack = rememberNavBackStack(FireWallKey)
     val domainRuleStack = rememberNavBackStack(DomainRulesKey)
     val settingsStack = rememberNavBackStack(SettingsKey)
@@ -88,69 +119,90 @@ fun HomeApp(
     val currentBackStack = when (currentTab) {
         BottomBarScreen.Home -> homeStack
         BottomBarScreen.FilterSetup -> filterStack
+        BottomBarScreen.Proxy -> wireguardStack
         BottomBarScreen.Firewall -> firewallStack
         BottomBarScreen.DomainRule -> domainRuleStack
         BottomBarScreen.Settings -> settingsStack
     }
 
-    val bottomBarScreens = listOf(
-        BottomBarScreen.Home,
-        BottomBarScreen.FilterSetup,
-        BottomBarScreen.Firewall,
-        BottomBarScreen.DomainRule,
-        BottomBarScreen.Settings
-    )
+    val bottomBarScreens = remember(secondaryTab) {
+        BottomBarScreen.resolveBottomBarScreens(secondaryTab, BuildConfig.IS_STORE)
+    }
     var showBottomBar by rememberSaveable { mutableStateOf(true) }
+    fun safePop(stack: MutableList<*>) {
+        if (stack.size > 1) {
+            stack.removeLastOrNull()
+        }
+        showBottomBar = stack.size <= 1
+    }
+
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (!showBottomBar) return@Scaffold
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
+            CompositionLocalProvider(
+                LocalDensity provides Density(
+                    density = LocalDensity.current.density,
+                    fontScale = 1f
+                )
             ) {
-                bottomBarScreens.forEach { screen ->
-                    NavigationBarItem(
-                        selected = currentBackStack == when (screen) {
-                            BottomBarScreen.Home -> homeStack
-                            BottomBarScreen.FilterSetup -> filterStack
-                            BottomBarScreen.Firewall -> firewallStack
-                            BottomBarScreen.DomainRule -> domainRuleStack
-                            BottomBarScreen.Settings -> settingsStack
-                        },
-                        onClick = {
-                            currentTab = screen
-                        },
-                        icon = {
-                            Icon(
-                                painter = painterResource(screen.icon),
-                                contentDescription = stringResource(screen.labelRes),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        },
-                        label = if (showBottomNavLabels) {
-                            {
-                                Text(
-                                    text = stringResource(screen.labelRes),
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = LocalTextStyle.current.copy(
-                                        fontSize = 12.sp
+                NavigationBar(
+                    windowInsets = WindowInsets.navigationBars,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ) {
+                    bottomBarScreens.forEach { screen ->
+                        NavigationBarItem(
+                            selected = currentBackStack == when (screen) {
+                                BottomBarScreen.Home -> homeStack
+                                BottomBarScreen.FilterSetup -> filterStack
+                                BottomBarScreen.Proxy -> wireguardStack
+                                BottomBarScreen.Firewall -> firewallStack
+                                BottomBarScreen.DomainRule -> domainRuleStack
+                                BottomBarScreen.Settings -> settingsStack
+                            },
+                            onClick = {
+                                currentTab = screen
+                            },
+                            icon = {
+                                if (screen == BottomBarScreen.Firewall && firewallEnabled) {
+                                    app.pwhs.blockads.ui.component.BurningFireIcon(
+                                        contentDescription = stringResource(screen.labelRes)
                                     )
-                                )
-                            }
-                        } else null,
-                        alwaysShowLabel = showBottomNavLabels,
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                } else {
+                                    Icon(
+                                        painter = painterResource(screen.icon),
+                                        contentDescription = stringResource(screen.labelRes),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            },
+                            label = if (showBottomNavLabels) {
+                                {
+                                    Text(
+                                        text = stringResource(screen.labelRes),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = LocalTextStyle.current.copy(
+                                            fontSize = 10.5.sp,
+                                            letterSpacing = (-0.2).sp
+                                        )
+                                    )
+                                }
+                            } else null,
+                            alwaysShowLabel = showBottomNavLabels,
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
-    ) {
+    ) { innerPadding ->
         // When on a non-Home tab root, back should switch to Home tab instead of exiting
         BackHandler(enabled = currentTab != BottomBarScreen.Home && currentBackStack.size <= 1) {
             currentTab = BottomBarScreen.Home
@@ -160,37 +212,52 @@ fun HomeApp(
         NavDisplay(
             backStack = currentBackStack,
             onBack = {
-                if (currentBackStack.size > 1) currentBackStack.removeLastOrNull()
-                showBottomBar = currentBackStack.size <= 1
+                safePop(currentBackStack)
             },
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+                .consumeWindowInsets(PaddingValues(bottom = innerPadding.calculateBottomPadding())),
             entryProvider = entryProvider {
                 entry<HomeKey> {
                     HomeScreen(
                         onShowVpnConflictDialog = onShowVpnConflictDialog,
                         onRequestVpnPermission = onRequestVpnPermission,
-                        onNavigateToLogScreen = {
+                        onNavigateToLogScreen = { filterStatus ->
                             showBottomBar = false
-                            homeStack.add(LogsKey)
+                            homeStack.add(LogsKey(filterStatus))
+                        },
+                        onNavigateToLogsWithQuery = { domain ->
+                            showBottomBar = false
+                            homeStack.add(LogsKey(searchQuery = domain))
                         },
                         onNavigateToStatisticsScreen = {
                             showBottomBar = false
                             homeStack.add(StatisticsKey)
                         },
-                        onNavigateToProfileScreen = {
+                        onNavigateToBrowser = { url ->
+                            context.startActivity(BrowserActivity.createIntent(context, url))
+                        },
+                        onNavigateToFeature = { featureType ->
                             showBottomBar = false
-                            homeStack.add(ProfileKey)
+                            when (featureType) {
+                                HomeFeatureTipType.APP_MANAGEMENT -> homeStack.add(AppManagementKey)
+                                HomeFeatureTipType.TRUSTED_NETWORKS -> homeStack.add(TrustedNetworksKey)
+                                HomeFeatureTipType.HTTPS_FILTERING -> homeStack.add(HttpsFilteringKey)
+                                HomeFeatureTipType.WIREGUARD -> homeStack.add(WireGuardImportKey)
+                            }
                         }
                     )
                 }
                 entry<FilterKey> {
                     FilterSetupScreen(
+                        canNavigateBack = currentBackStack.size > 1,
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        },
                         onNavigateToFilterDetail = { filterId ->
                             showBottomBar = false
-                            filterStack.add(FilterDetailKey(filterId))
-                        },
-                        onNavigateToCustomRules = {
-                            showBottomBar = false
-                            filterStack.add(CustomRuleKey)
+                            currentBackStack.add(FilterDetailKey(filterId))
                         }
                     )
                 }
@@ -214,13 +281,6 @@ fun HomeApp(
                             showBottomBar = false
                             settingsStack.add(AppManagementKey)
                         },
-                        onNavigateToFilterSetup = {
-                            currentTab = BottomBarScreen.FilterSetup
-                        },
-                        onNavigateToWhitelistApps = {
-                            showBottomBar = false
-                            settingsStack.add(WhiteListAppKey)
-                        },
                         onNavigateToTrustedNetworks = {
                             showBottomBar = false
                             settingsStack.add(TrustedNetworksKey)
@@ -229,6 +289,12 @@ fun HomeApp(
                             showBottomBar = false
                             settingsStack.add(WireGuardImportKey)
                         },
+                        onNavigateToFilterSetup = {
+                            showBottomBar = false
+                            settingsStack.add(FilterKey)
+                        },
+                        hasVpnInBottomBar = bottomBarScreens.contains(BottomBarScreen.Proxy),
+                        hasFilterInBottomBar = bottomBarScreens.contains(BottomBarScreen.FilterSetup),
                         onNavigateToHttpsFiltering = {
                             showBottomBar = false
                             settingsStack.add(HttpsFilteringKey)
@@ -236,30 +302,34 @@ fun HomeApp(
                         onNavigateToDNSProvider = {
                             showBottomBar = false
                             settingsStack.add(DnsProviderKey)
+                        },
+                        onNavigateToGeoIp = {
+                            showBottomBar = false
+                            settingsStack.add(GeoIpKey)
+                        },
+                        onNavigateToTailscale = {
+                            showBottomBar = false
+                            settingsStack.add(TailscaleKey)
                         }
                     )
                 }
                 entry<StatisticsKey> {
                     StatisticsScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            homeStack.removeLastOrNull()
+                            safePop(homeStack)
+                        },
+                        onNavigateToFilterDetail = { filterId ->
+                            showBottomBar = false
+                            homeStack.add(FilterDetailKey(filterId))
                         }
                     )
                 }
                 entry<LogsKey> {
                     LogsScreen(
+                        initialFilterStatus = it.filterStatus,
+                        initialSearchQuery = it.searchQuery,
                         onNavigateBack = {
-                            showBottomBar = true
-                            homeStack.removeLastOrNull()
-                        }
-                    )
-                }
-                entry<ProfileKey> {
-                    ProfileScreen(
-                        onNavigateBack = {
-                            showBottomBar = true
-                            homeStack.removeLastOrNull()
+                            safePop(homeStack)
                         }
                     )
                 }
@@ -267,91 +337,153 @@ fun HomeApp(
                     FilterDetailScreen(
                         filterId = it.filterId,
                         onNavigateBack = {
-                            showBottomBar = true
-                            filterStack.removeLastOrNull()
-                        }
-                    )
-                }
-                entry<CustomRuleKey> {
-                    CustomRulesScreen(
-                        onNavigateBack = {
-                            showBottomBar = true
-                            filterStack.removeLastOrNull()
+                            safePop(currentBackStack)
                         }
                     )
                 }
                 entry<AboutKey> {
                     AboutScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(settingsStack)
                         }
                     )
                 }
                 entry<AppearanceKey> {
                     AppearanceScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(settingsStack)
                         }
                     )
                 }
                 entry<AppManagementKey> {
                     AppManagementScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
                         }
                     )
                 }
                 entry<DnsProviderKey> {
                     DnsProviderScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
-                        }
-                    )
-                }
-                entry<WhiteListAppKey> {
-                    AppWhitelistScreen(
-                        onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
                         }
                     )
                 }
                 entry<TrustedNetworksKey> {
                     app.pwhs.blockads.ui.trustednetworks.TrustedNetworksScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
                         }
                     )
                 }
-                entry<WireGuardImportKey> {
-                    WireGuardImportScreen(
+                entry<ProxyVpnKey> {
+                    ProxyVpnScreen(
+                        canNavigateBack = currentBackStack.size > 1,
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
                         },
                         onEditProfile = { profileId ->
-                            settingsStack.add(WireGuardEditKey(profileId))
+                            currentBackStack.add(WireGuardEditKey(profileId))
                         },
+                        onEditProxyProfile = { profileId ->
+                            currentBackStack.add(ProxyEditKey(profileId))
+                        },
+                        onAddCustomProxy = {
+                            currentBackStack.add(ProxyEditKey(null))
+                        },
+                        onNavigateToVpnSettings = {
+                            currentBackStack.add(VpnSettingsKey)
+                        },
+                    )
+                }
+                entry<WireGuardImportKey> {
+                    ProxyVpnScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        },
+                        onEditProfile = { profileId ->
+                            currentBackStack.add(WireGuardEditKey(profileId))
+                        },
+                        onEditProxyProfile = { profileId ->
+                            currentBackStack.add(ProxyEditKey(profileId))
+                        },
+                        onAddCustomProxy = {
+                            currentBackStack.add(ProxyEditKey(null))
+                        },
+                        onNavigateToVpnSettings = {
+                            currentBackStack.add(VpnSettingsKey)
+                        },
+                    )
+                }
+                entry<VpnSettingsKey> {
+                    VpnSettingsScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
                     )
                 }
                 entry<WireGuardEditKey> { key ->
                     WireGuardEditScreen(
                         profileId = key.profileId,
                         onNavigateBack = {
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
+                        },
+                    )
+                }
+                entry<ProxyEditKey> { key ->
+                    ProxyEditScreen(
+                        profileId = key.profileId,
+                        onNavigateBack = {
+                            safePop(currentBackStack)
                         },
                     )
                 }
                 entry<HttpsFilteringKey> {
                     HttpsFilteringScreen(
                         onNavigateBack = {
-                            showBottomBar = true
-                            settingsStack.removeLastOrNull()
+                            safePop(currentBackStack)
+                        },
+                        onNavigateToWizard = {
+                            currentBackStack.add(CertInstallationWizardKey)
+                        }
+                    )
+                }
+                entry<CertInstallationWizardKey> {
+                    CertInstallationWizardScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
+                    )
+                }
+                entry<TailscaleKey> {
+                    TailscaleScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
+                    )
+                }
+                entry<BrowserKey> { key ->
+                    BrowserScreen(
+                        initialUrl = key.initialUrl,
+                        onCloseBrowser = {
+                            safePop(currentBackStack)
+                        },
+                        onNavigateToElementRules = {
+                            currentBackStack.add(ElementRulesKey)
+                        }
+                    )
+                }
+                entry<ElementRulesKey> {
+                    ElementRulesScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
+                    )
+                }
+                entry<GeoIpKey> {
+                    GeoIpScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
                         }
                     )
                 }

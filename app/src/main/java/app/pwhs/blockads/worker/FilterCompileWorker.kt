@@ -67,22 +67,35 @@ class FilterCompileWorker(
         val existingId = inputData.getLong(KEY_FILTER_ID, -1L)
 
         val remoteFilterDir = File(applicationContext.filesDir, REMOTE_FILTERS_DIR).apply { mkdirs() }
-        val tempFile = File(applicationContext.cacheDir, "worker_compile_${System.currentTimeMillis()}.txt")
-        val tempTrie = File(applicationContext.cacheDir, "worker_compile_${System.currentTimeMillis()}.trie")
-        val tempBloom = File(applicationContext.cacheDir, "worker_compile_${System.currentTimeMillis()}.bloom")
+        val ts = System.currentTimeMillis()
+        val tempFile = File(applicationContext.cacheDir, "worker_compile_$ts.txt")
+        val tempBase = File(applicationContext.cacheDir, "worker_compile_$ts")
+        val tempTrie = File("${tempBase.absolutePath}.trie")
+        val tempBloom = File("${tempBase.absolutePath}.bloom")
+        val tempCss = File("${tempBase.absolutePath}.css")
+        val tempScriptlets = File("${tempBase.absolutePath}.scriptlets")
+        val tempModules = File("${tempBase.absolutePath}.modules.json")
 
         try {
             showProgressNotification(name)
 
-            // Download
-            Timber.d("FilterCompileWorker: downloading $url")
-            val response = client.get(url)
-            val channel = response.bodyAsChannel()
+            // Download (supports multi-line URLs for merged filters)
+            val urls = url.lines().map { it.trim() }.filter { it.isNotBlank() }
+            if (urls.isEmpty()) {
+                showResultNotification(name, false, "No valid URL provided")
+                return Result.failure()
+            }
             tempFile.outputStream().use { output ->
-                val buffer = ByteArray(8 * 1024)
-                while (!channel.isClosedForRead) {
-                    val read = channel.readAvailable(buffer)
-                    if (read > 0) output.write(buffer, 0, read)
+                for (u in urls) {
+                    Timber.d("FilterCompileWorker: downloading $u")
+                    val response = client.get(u)
+                    val channel = response.bodyAsChannel()
+                    val buffer = ByteArray(8 * 1024)
+                    while (!channel.isClosedForRead) {
+                        val read = channel.readAvailable(buffer)
+                        if (read > 0) output.write(buffer, 0, read)
+                    }
+                    output.write("\n".toByteArray())
                 }
             }
 
@@ -97,6 +110,9 @@ class FilterCompileWorker(
                 return Result.failure()
             }
 
+            val hasCss = tempCss.exists() && tempCss.length() > 0
+            val hasScriptlets = tempScriptlets.exists() && tempScriptlets.length() > 0
+
             // DB insert or update
             val filterId = if (existingId > 0) {
                 // Update existing filter (placeholder or recompile)
@@ -108,6 +124,8 @@ class FilterCompileWorker(
                         description = "Custom filter: ${existing.name}",
                         bloomUrl = "local://$existingId.bloom",
                         trieUrl = "local://$existingId.trie",
+                        cssUrl = if (hasCss) "local://$existingId.css" else existing.cssUrl,
+                        scriptletsUrl = if (hasScriptlets) "local://$existingId.scriptlets" else existing.scriptletsUrl,
                         lastUpdated = System.currentTimeMillis()
                     )
                     filterListDao.update(updated)
@@ -127,6 +145,7 @@ class FilterCompileWorker(
                     bloomUrl = "",
                     trieUrl = "",
                     cssUrl = "",
+                    scriptletsUrl = "",
                     originalUrl = url,
                     lastUpdated = System.currentTimeMillis()
                 )
@@ -134,7 +153,9 @@ class FilterCompileWorker(
                 filterListDao.update(entity.copy(
                     id = id,
                     bloomUrl = "local://$id.bloom",
-                    trieUrl = "local://$id.trie"
+                    trieUrl = "local://$id.trie",
+                    cssUrl = if (hasCss) "local://$id.css" else "",
+                    scriptletsUrl = if (hasScriptlets) "local://$id.scriptlets" else ""
                 ))
                 id
             }
@@ -142,6 +163,15 @@ class FilterCompileWorker(
             // Move compiled files to final location
             File(remoteFilterDir, "$filterId.trie").let { tempTrie.copyTo(it, overwrite = true) }
             File(remoteFilterDir, "$filterId.bloom").let { tempBloom.copyTo(it, overwrite = true) }
+            if (hasCss) {
+                tempCss.copyTo(File(remoteFilterDir, "$filterId.css"), overwrite = true)
+            }
+            if (hasScriptlets) {
+                tempScriptlets.copyTo(File(remoteFilterDir, "$filterId.scriptlets"), overwrite = true)
+            }
+            if (tempModules.exists() && tempModules.length() > 0) {
+                tempModules.copyTo(File(remoteFilterDir, "$filterId.modules.json"), overwrite = true)
+            }
 
             // Reload engine
             filterRepo.loadAllEnabledFilters()
@@ -170,6 +200,9 @@ class FilterCompileWorker(
             tempFile.delete()
             tempTrie.delete()
             tempBloom.delete()
+            tempCss.delete()
+            tempScriptlets.delete()
+            tempModules.delete()
         }
     }
 

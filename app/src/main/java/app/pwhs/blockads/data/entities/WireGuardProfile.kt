@@ -16,6 +16,24 @@ data class WireGuardProfile(
     val name: String,
     val config: WireGuardConfig,
 ) {
+    val isAmnezia: Boolean
+        get() = config.isAmnezia
+
+    fun isSameProfile(other: WireGuardProfile): Boolean {
+        if (id == other.id) return true
+        val thisPeer = config.peers.firstOrNull()
+        val otherPeer = other.config.peers.firstOrNull()
+        if (thisPeer != null && otherPeer != null) {
+            val end1 = thisPeer.endpoint.orEmpty()
+            val end2 = otherPeer.endpoint.orEmpty()
+            if (end1.isNotEmpty() && end1 == end2 &&
+                thisPeer.publicKey.isNotEmpty() && thisPeer.publicKey == otherPeer.publicKey) {
+                return true
+            }
+        }
+        return name.isNotEmpty() && name.equals(other.name, ignoreCase = true) && thisPeer?.endpoint == otherPeer?.endpoint
+    }
+
     companion object {
         fun newId(): String = UUID.randomUUID().toString()
     }

@@ -24,6 +24,13 @@ class NotificationHelper(
         const val MILESTONE_CHANNEL_ID = "blockads_milestone_channel"
         private const val MILESTONE_NOTIFICATION_ID = 3001
         val MILESTONES = longArrayOf(1_000, 10_000, 50_000, 100_000, 1_000_000)
+
+        /** Highest milestone reached by [blocked] and newer than [lastSeen]; null when [enabled] is off. */
+        fun unseenMilestone(blocked: Long, lastSeen: Long, enabled: Boolean): Long? {
+            if (!enabled) return null
+            val reached = MILESTONES.filter { it <= blocked }.maxOrNull() ?: return null
+            return reached.takeIf { it > lastSeen }
+        }
     }
 
     private val milestoneMutex = Mutex()

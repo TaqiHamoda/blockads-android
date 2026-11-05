@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -43,7 +44,8 @@ fun HomeAppBar(
     filterLoadFailed: Boolean,
     viewModel: HomeViewModel,
     onNavigateToStatisticsScreen: () -> Unit,
-    onNavigateToLogScreen: () -> Unit
+    onNavigateToLogScreen: () -> Unit,
+    onNavigateToBrowser: (String) -> Unit = {}
 ) {
     val telegramUri = stringResource(R.string.telegram_link).toUri()
     val testBlockUri = stringResource(R.string.test_block_link).toUri()
@@ -124,6 +126,14 @@ fun HomeAppBar(
             }
         },
         actions = {
+            IconButton(onClick = { onNavigateToBrowser("https://m.youtube.com") }) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_browser),
+                    contentDescription = stringResource(R.string.nav_browser),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
             IconButton(onClick = onNavigateToStatisticsScreen) {
                 Icon(
                     painter = painterResource(R.drawable.ic_chart_bar),
@@ -142,7 +152,7 @@ fun HomeAppBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
+            containerColor = Color.Transparent,
             actionIconContentColor = MaterialTheme.colorScheme.primary
         )
     )

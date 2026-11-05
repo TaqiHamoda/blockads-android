@@ -6,9 +6,38 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
 import app.pwhs.blockads.data.datastore.AppPreferences
+import java.io.File
 import java.util.Locale
 
 object LocaleHelper {
+
+    private const val APP_LANGUAGE_FILE = "app_language.txt"
+
+    /**
+     * Persist the user's selected app language into filesDir so the Go
+     * local asset server (local.pwhs.app) renders in the matching language
+     * (falling back to English when set to "system" or unset).
+     */
+    fun syncLocalAssetLanguage(context: Context, languageTag: String) {
+        runCatching {
+            val resolved = if (languageTag == AppPreferences.LANGUAGE_SYSTEM &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+            ) {
+                val lm = context.getSystemService(LocaleManager::class.java)
+                val appLocales = lm?.applicationLocales
+                if (appLocales != null && !appLocales.isEmpty) {
+                    appLocales[0]?.toLanguageTag() ?: AppPreferences.LANGUAGE_EN
+                } else {
+                    AppPreferences.LANGUAGE_EN
+                }
+            } else if (languageTag == AppPreferences.LANGUAGE_SYSTEM) {
+                AppPreferences.LANGUAGE_EN
+            } else {
+                languageTag
+            }
+            File(context.filesDir, APP_LANGUAGE_FILE).writeText(resolved)
+        }
+    }
 
     /**
      * Apply locale change at runtime.
@@ -16,6 +45,7 @@ object LocaleHelper {
      * On older APIs, the activity will need to recreate.
      */
     fun setLocale(context: Context, languageTag: String) {
+        syncLocalAssetLanguage(context, languageTag)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val localeManager = context.getSystemService(LocaleManager::class.java)
             localeManager.applicationLocales = if (languageTag == AppPreferences.LANGUAGE_SYSTEM) {

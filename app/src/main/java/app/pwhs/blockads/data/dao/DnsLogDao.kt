@@ -4,9 +4,12 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import app.pwhs.blockads.data.entities.AppStat
+import app.pwhs.blockads.data.entities.BlockReasonRawStat
+import app.pwhs.blockads.data.entities.CountryStat
+import app.pwhs.blockads.data.entities.CountryTopDomain
 import app.pwhs.blockads.data.entities.DailyStat
 import app.pwhs.blockads.data.entities.TopBlockedDomain
-import app.pwhs.blockads.data.entities.AppStat
 import app.pwhs.blockads.data.entities.DnsLogEntry
 import app.pwhs.blockads.data.entities.HourlyStat
 import app.pwhs.blockads.data.entities.MonthlyStat
@@ -26,11 +29,17 @@ interface DnsLogDao {
     @Query("SELECT * FROM dns_logs WHERE isBlocked = 1 ORDER BY timestamp DESC")
     fun getBlockedOnly(): Flow<List<DnsLogEntry>>
 
+    @Query("SELECT * FROM dns_logs WHERE isBlocked = 0 ORDER BY timestamp DESC")
+    fun getAllowedOnly(): Flow<List<DnsLogEntry>>
+
     @Query("SELECT * FROM dns_logs WHERE timestamp > :since ORDER BY timestamp DESC")
     fun getAllSince(since: Long): Flow<List<DnsLogEntry>>
 
     @Query("SELECT * FROM dns_logs WHERE isBlocked = 1 AND timestamp > :since ORDER BY timestamp DESC")
     fun getBlockedOnlySince(since: Long): Flow<List<DnsLogEntry>>
+
+    @Query("SELECT * FROM dns_logs WHERE isBlocked = 0 AND timestamp > :since ORDER BY timestamp DESC")
+    fun getAllowedOnlySince(since: Long): Flow<List<DnsLogEntry>>
 
     @Query("SELECT DISTINCT appName FROM dns_logs WHERE appName != '' ORDER BY appName ASC")
     fun getDistinctAppNames(): Flow<List<String>>
@@ -77,6 +86,9 @@ interface DnsLogDao {
 
     @Query("DELETE FROM dns_logs")
     suspend fun clearAll()
+
+    @Query("DELETE FROM dns_logs WHERE timestamp < :beforeTimestamp")
+    suspend fun deleteLogsOlderThan(beforeTimestamp: Long): Int
 
     @Query("SELECT * FROM dns_logs WHERE isBlocked = 1 ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentBlocked(limit: Int = 5): Flow<List<DnsLogEntry>>
@@ -203,4 +215,101 @@ interface DnsLogDao {
         """
     )
     fun getBlockedCountByReasonSince(reason: String, since: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT * FROM dns_logs WHERE isBlocked = 1
+        AND (INSTR(',' || blockedBy || ',', ',' || :reason || ',') > 0
+             OR blockedBy IN (SELECT CAST(id AS TEXT) FROM filter_lists WHERE category = :reason))
+        ORDER BY timestamp DESC
+        """
+    )
+    fun getBlockedByReason(reason: String): Flow<List<DnsLogEntry>>
+
+    @Query(
+        """
+        SELECT * FROM dns_logs WHERE isBlocked = 1 AND timestamp > :since
+        AND (INSTR(',' || blockedBy || ',', ',' || :reason || ',') > 0
+             OR blockedBy IN (SELECT CAST(id AS TEXT) FROM filter_lists WHERE category = :reason))
+        ORDER BY timestamp DESC
+        """
+    )
+    fun getBlockedByReasonSince(reason: String, since: Long): Flow<List<DnsLogEntry>>
+
+    @Query(
+        """
+        SELECT countryCode, COUNT(*) AS count
+        FROM dns_logs
+        WHERE countryCode != '' AND timestamp > :since
+        GROUP BY countryCode
+        ORDER BY count DESC
+        """
+    )
+    fun getCountryStatsSince(since: Long): Flow<List<CountryStat>>
+
+    @Query(
+        """
+        SELECT countryCode, COUNT(*) AS count
+        FROM dns_logs
+        WHERE countryCode != ''
+        GROUP BY countryCode
+        ORDER BY count DESC
+        """
+    )
+    fun getAllCountryStats(): Flow<List<CountryStat>>
+
+    @Query(
+        """
+        SELECT blockedBy, COUNT(*) AS count
+        FROM dns_logs
+        WHERE isBlocked = 1 AND blockedBy != '' AND timestamp > :since
+        GROUP BY blockedBy
+        ORDER BY count DESC
+        """
+    )
+    fun getBlockReasonStatsSince(since: Long): Flow<List<BlockReasonRawStat>>
+
+    @Query(
+        """
+        SELECT blockedBy, COUNT(*) AS count
+        FROM dns_logs
+        WHERE isBlocked = 1 AND blockedBy != ''
+        GROUP BY blockedBy
+        ORDER BY count DESC
+        """
+    )
+    fun getAllBlockReasonStats(): Flow<List<BlockReasonRawStat>>
+
+    @Query(
+        """
+        SELECT domain, COUNT(*) AS count,
+               SUM(CASE WHEN isBlocked = 1 THEN 1 ELSE 0 END) AS blockedCount
+        FROM dns_logs
+        WHERE UPPER(countryCode) = UPPER(:countryCode) AND timestamp > :since
+        GROUP BY domain
+        ORDER BY (CASE WHEN domain LIKE 'TCP %' OR domain LIKE 'UDP %' THEN 1 ELSE 0 END) ASC, count DESC
+        LIMIT :limit
+        """
+    )
+    fun getCountryTopDomainsSince(
+        countryCode: String,
+        since: Long,
+        limit: Int = 10
+    ): Flow<List<CountryTopDomain>>
+
+    @Query(
+        """
+        SELECT domain, COUNT(*) AS count,
+               SUM(CASE WHEN isBlocked = 1 THEN 1 ELSE 0 END) AS blockedCount
+        FROM dns_logs
+        WHERE UPPER(countryCode) = UPPER(:countryCode)
+        GROUP BY domain
+        ORDER BY (CASE WHEN domain LIKE 'TCP %' OR domain LIKE 'UDP %' THEN 1 ELSE 0 END) ASC, count DESC
+        LIMIT :limit
+        """
+    )
+    fun getAllCountryTopDomains(
+        countryCode: String,
+        limit: Int = 10
+    ): Flow<List<CountryTopDomain>>
 }

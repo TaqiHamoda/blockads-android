@@ -21,6 +21,12 @@ interface DnsLogDao {
     @Query("SELECT * FROM dns_logs ORDER BY timestamp DESC LIMIT :limit")
     fun getRecentLogs(limit: Int): Flow<List<DnsLogEntry>>
 
+    @Query("SELECT * FROM dns_logs WHERE isBlocked = 1 ORDER BY timestamp DESC LIMIT :limit")
+    fun getRecentBlockedLogs(limit: Int): Flow<List<DnsLogEntry>>
+
+    @Query("SELECT * FROM dns_logs WHERE isBlocked = 0 ORDER BY timestamp DESC LIMIT :limit")
+    fun getRecentAllowedLogs(limit: Int): Flow<List<DnsLogEntry>>
+
     @Query("SELECT COUNT(*) FROM dns_logs WHERE isBlocked = 1")
     fun getBlockedCount(): Flow<Int>
 

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="clear_device_owner_confirm_message">هل أنت تأكد من رغبتك في إزالة صلاحيات مسؤول الجهاز؟ سيؤدي هذا إلى إلغاء جميع السياسات الإدارية والسماح بـ إلغاء تثبيت التطبيق.</string>
+    <string name="clear_device_owner_confirm_title">إزالة صلاحيات مسؤول الجهاز؟</string>
+    <string name="delete">حذف</string>
+    <string name="device_admin_description">مسؤول الجهاز لفرض الاستمرارية وقيود السياسة لـ BlockAds.</string>
+    <string name="device_owner_cleared_success">تمت إزالة صلاحيات مسؤول الجهاز</string>
+    <string name="device_owner_clear_failed">فشل في إزالة صلاحيات مسؤول الجهاز</string>
+    <string name="lockdown_duration_10m">10 دقائق</string>
+    <string name="lockdown_duration_12h">12 ساعة</string>
+    <string name="lockdown_duration_1h">1 ساعة</string>
+    <string name="lockdown_duration_1m">1 دقيقة</string>
+    <string name="lockdown_duration_24h">24 ساعة</string>
+    <string name="lockdown_duration_30m">30 دقيقة</string>
+    <string name="lockdown_duration_5m">5 دقائق</string>
+    <string name="lockdown_duration_6h">6 ساعات</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d ساعة</item>
+        <item quantity="other">%1$d ساعات</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="one">%1$d دقيقة</item>
+        <item quantity="other">%1$d دقائق</item>
+    </plurals>
+    <string name="lockdown_screen_add_blacklist">إضافة موقع إلى القائمة السوداء</string>
+    <string name="lockdown_screen_cancel">إلغاء التهدئة</string>
+    <string name="lockdown_screen_cancel_desc">سيؤدي الإلغاء إلى إعادة تعيين المؤقت للوقت الكامل.</string>
+    <string name="lockdown_screen_desc">لتعديل إعداداتك أو تعطيل حظر الإعلانات، يجب عليك بدء مؤقت التهدئة.</string>
+    <string name="lockdown_screen_duration">مدة المؤقت: %1$s</string>
+    <string name="lockdown_screen_start">بدء مؤقت التهدئة</string>
+    <string name="lockdown_screen_title">BlockAds مقفل</string>
+    <string name="settings_device_owner_clear_owner">إزالة مسؤول الجهاز</string>
+    <string name="settings_device_owner_clear_owner_desc">إلغاء صلاحيات مسؤول الجهاز الإدارية لـ BlockAds.</string>
+    <string name="settings_device_owner_enforce_restrictions">قيود الجهاز</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">قم بالتمكين لتطبيق قيود على مستوى التطبيق (حظر أدوات المطور ، وما إلى ذلك). قم بالتعطيل لمسحها.</string>
+    <string name="settings_device_owner_section_desc">إدارة قيود مالك الجهاز. مرئي فقط لأن BlockAds هو مالك الجهاز.</string>
+    <string name="settings_device_owner_section_title">التحكم في مالك الجهاز</string>
+    <string name="settings_lockdown_duration_desc">الوقت الذي يجب أن تنتظره لفتح التطبيق</string>
+    <string name="settings_lockdown_duration_title">مدة التهدئة</string>
+    <string name="settings_lockdown_mode_desc">عند التفعيل، لا يمكنك إيقاف تشغيل VPN أو الوصول إلى الإعدادات دون الانتظار لانتهاء مؤقت التهدئة.</string>
+    <string name="settings_lockdown_mode_title">وضع قفل VPN</string>
+    <string name="settings_lockdown_section_desc">فرض مؤقت للتهدئة لتعطيل حظر الإعلانات. يساعد في منع الانتكاسات الاندفاعية.</string>
+    <string name="settings_lockdown_section_title">التحكم في الاندفاع والقفل</string>
+</resources>

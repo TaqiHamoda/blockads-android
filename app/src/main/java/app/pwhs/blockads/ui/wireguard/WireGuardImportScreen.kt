@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.FileOpen
@@ -60,8 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pwhs.blockads.R
 import app.pwhs.blockads.data.entities.WireGuardProfile
+import app.pwhs.blockads.data.geoip.GeoIpLookup
 import app.pwhs.blockads.ui.wireguard.component.EmptyState
 import app.pwhs.blockads.ui.wireguard.component.ProfileRow
+import app.pwhs.blockads.ui.wireguard.component.SettingToggleCard
+import app.pwhs.blockads.utils.WireGuardGeoIpHelper
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,6 +83,7 @@ fun WireGuardImportScreen(
     val isWgActive by viewModel.isWgActive.collectAsStateWithLifecycle()
     val splitDnsZones by viewModel.splitDnsZones.collectAsStateWithLifecycle()
     val excludeLan by viewModel.excludeLan.collectAsStateWithLifecycle()
+    val allowAppBypass by viewModel.allowAppBypass.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val resources = LocalResources.current
@@ -176,8 +181,10 @@ fun WireGuardImportScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item {
+                        val activeProfile = profiles.firstOrNull { it.id == activeId }
                         WireGuardToggleCard(
                             isWgActive = isWgActive,
+                            activeProfile = activeProfile,
                             onToggle = { viewModel.toggleWireGuard() },
                         )
                     }
@@ -201,13 +208,26 @@ fun WireGuardImportScreen(
                     }
 
                     item {
-                        ExcludeLanCard(
+                        SettingToggleCard(
+                            icon = Icons.Filled.Lan,
+                            title = stringResource(R.string.exclude_lan_title),
+                            description = stringResource(R.string.exclude_lan_description),
                             checked = excludeLan,
                             onCheckedChange = { viewModel.setExcludeLan(it) },
                         )
                     }
 
-                    item { Spacer(Modifier.height(80.dp)) }
+                    item {
+                        SettingToggleCard(
+                            icon = Icons.AutoMirrored.Filled.AltRoute,
+                            title = stringResource(R.string.allow_app_bypass_title),
+                            description = stringResource(R.string.allow_app_bypass_description),
+                            checked = allowAppBypass,
+                            onCheckedChange = { viewModel.setAllowAppBypass(it) },
+                        )
+                    }
+
+                    item { Spacer(Modifier.height(24.dp)) }
                 }
             }
         }
@@ -245,8 +265,17 @@ fun WireGuardImportScreen(
 @Composable
 private fun WireGuardToggleCard(
     isWgActive: Boolean,
+    activeProfile: WireGuardProfile?,
     onToggle: () -> Unit,
 ) {
+    val endpoint = activeProfile?.config?.peers?.firstOrNull()?.endpoint.orEmpty()
+    val countryCode = remember(activeProfile?.id, endpoint) {
+        if (activeProfile != null) {
+            WireGuardGeoIpHelper.getCountryCodeFast(endpoint, activeProfile.name)
+        } else null
+    }
+    val flagEmoji = countryCode?.let { GeoIpLookup.countryCodeToEmoji(it) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -282,7 +311,11 @@ private fun WireGuardToggleCard(
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = stringResource(R.string.wireguard_import_title),
+                        text = if (isWgActive && activeProfile != null) {
+                            if (flagEmoji != null) "$flagEmoji ${activeProfile.name}" else activeProfile.name
+                        } else {
+                            stringResource(R.string.wireguard_import_title)
+                        },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -353,59 +386,6 @@ private fun SplitDnsCard(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExcludeLanCard(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Lan,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = stringResource(R.string.exclude_lan_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = stringResource(R.string.exclude_lan_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                ),
             )
         }
     }

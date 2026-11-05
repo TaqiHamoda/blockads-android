@@ -37,12 +37,14 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import app.pwhs.blockadstv.R
 import app.pwhs.blockadstv.data.dao.CustomDnsRuleDao
 import app.pwhs.blockadstv.data.dao.WhitelistDomainDao
 import app.pwhs.blockadstv.data.entities.CustomDnsRule
@@ -75,7 +77,7 @@ fun DomainRulesScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.AutoMirrored.Default.Rule,
+                painter = painterResource(R.drawable.ic_crown),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp),
@@ -238,7 +240,7 @@ private fun DomainRuleRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (isAllow) Icons.Default.CheckCircle else Icons.Default.Block,
+            painter = painterResource(if (isAllow) R.drawable.ic_check else R.drawable.ic_shield_off),
             contentDescription = null,
             tint = if (isAllow) NeonGreen else DangerRed,
             modifier = Modifier.size(20.dp),

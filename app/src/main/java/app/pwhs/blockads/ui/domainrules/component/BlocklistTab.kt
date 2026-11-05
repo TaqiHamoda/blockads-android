@@ -2,6 +2,7 @@ package app.pwhs.blockads.ui.domainrules.component
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,7 +23,9 @@ import app.pwhs.blockads.ui.theme.TextSecondary
 @Composable
 fun BlocklistTab(
     domains: List<CustomDnsRule>,
-    onRemove: (CustomDnsRule) -> Unit
+    onToggle: (CustomDnsRule) -> Unit = {},
+    onRemove: (CustomDnsRule) -> Unit,
+    onEdit: (CustomDnsRule) -> Unit = {}
 ) {
     if (domains.isEmpty()) {
         EmptyState(stringResource(R.string.blocklist_domains_empty))
@@ -37,7 +40,7 @@ fun BlocklistTab(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                contentPadding = PaddingValues(
                     start = 16.dp, end = 16.dp, top = 8.dp, bottom = 80.dp
                 )
             ) {
@@ -53,7 +56,10 @@ fun BlocklistTab(
                             addedTimestamp = rule.addedTimestamp,
                             iconTint = DangerRed.copy(alpha = 0.7f),
                             icon = Icons.Default.Block,
-                            onDelete = { onRemove(rule) }
+                            isEnabled = rule.isEnabled,
+                            onToggle = { onToggle(rule) },
+                            onDelete = { onRemove(rule) },
+                            onEdit = { onEdit(rule) }
                         )
                     }
                 }

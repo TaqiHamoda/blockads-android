@@ -14,6 +14,7 @@ import app.pwhs.blockads.data.entities.WhitelistDomain
 import app.pwhs.blockads.data.dao.WhitelistDomainDao
 import app.pwhs.blockads.ui.event.UiEvent
 import app.pwhs.blockads.ui.event.toast
+import app.pwhs.blockads.ui.logs.data.LogFilterStatus
 import app.pwhs.blockads.ui.logs.data.TimeRange
 import app.pwhs.blockads.utils.CustomRuleParser
 import kotlinx.coroutines.Dispatchers
@@ -30,12 +31,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.PrintWriter
 import java.text.SimpleDateFormat
 import java.util.Locale
-
+import app.pwhs.blockads.data.dao.FirewallRuleDao
 import app.pwhs.blockads.data.datastore.AppPreferences
-import kotlinx.coroutines.flow.map
+import app.pwhs.blockads.data.entities.FirewallRule
+import app.pwhs.blockads.service.ServiceController
 
 class LogViewModel(
     private val dnsLogDao: DnsLogDao,
@@ -45,10 +46,16 @@ class LogViewModel(
     private val filterListRepository: FilterListRepository,
     private val appPrefs: AppPreferences,
     private val application: Application,
+    private val firewallRuleDao: FirewallRuleDao? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : AndroidViewModel(application) {
 
-    private val _showBlockedOnly = MutableStateFlow(false)
-    val showBlockedOnly: StateFlow<Boolean> = _showBlockedOnly.asStateFlow()
+    private val _filterStatus = MutableStateFlow(LogFilterStatus.ALL)
+    val filterStatus: StateFlow<LogFilterStatus> = _filterStatus.asStateFlow()
+
+    val showBlockedOnly: StateFlow<Boolean> = _filterStatus
+        .map { it == LogFilterStatus.BLOCKED }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -72,7 +79,7 @@ class LogViewModel(
     val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
 
     val whitelistedDomains: StateFlow<Set<String>> = whitelistDomainDao.getAll()
-        .map { list -> list.map { it.domain.lowercase() }.toSet() }
+        .map { list -> list.filter { it.isEnabled }.map { it.domain.lowercase() }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     val filterNames: StateFlow<Map<String, String>> = filterListDao.getAll()
@@ -82,19 +89,35 @@ class LogViewModel(
     val appNames: StateFlow<List<String>> = dnsLogDao.getDistinctAppNames()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val blockedFirewallPackages: StateFlow<Set<String>> = (firewallRuleDao?.getAll() ?: MutableStateFlow(emptyList()))
+        .map { list -> list.map { it.packageName }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    fun toggleAppFirewall(packageName: String) {
+        if (packageName.isBlank() || firewallRuleDao == null) return
+        viewModelScope.launch {
+            val existing = firewallRuleDao.getByPackageName(packageName)
+            if (existing != null) {
+                firewallRuleDao.deleteByPackageName(packageName)
+            } else {
+                firewallRuleDao.insert(FirewallRule(packageName = packageName))
+            }
+            ServiceController.requestRestart(application.applicationContext)
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val logs: StateFlow<List<DnsLogEntry>> = combine(
-        _showBlockedOnly,
+        _filterStatus,
         _timeRange
-    ) { blockedOnly, range -> Pair(blockedOnly, range) }
-        .flatMapLatest { (blockedOnly, range) ->
+    ) { status, range -> Pair(status, range) }
+        .flatMapLatest { (status, range) ->
             val since = if (range == TimeRange.ALL) 0L
-            else System.currentTimeMillis() - range.millis
-            when {
-                blockedOnly && since > 0 -> dnsLogDao.getBlockedOnlySince(since)
-                blockedOnly -> dnsLogDao.getBlockedOnly()
-                since > 0 -> dnsLogDao.getAllSince(since)
-                else -> dnsLogDao.getAll()
+            else clock() - range.millis
+            when (status) {
+                LogFilterStatus.ALL -> if (since > 0) dnsLogDao.getAllSince(since) else dnsLogDao.getAll()
+                LogFilterStatus.BLOCKED -> if (since > 0) dnsLogDao.getBlockedOnlySince(since) else dnsLogDao.getBlockedOnly()
+                LogFilterStatus.ALLOWED -> if (since > 0) dnsLogDao.getAllowedOnlySince(since) else dnsLogDao.getAllowedOnly()
             }
         }
         .combine(_searchQuery) { logs, query ->
@@ -110,8 +133,16 @@ class LogViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    fun setFilterStatus(status: LogFilterStatus) {
+        _filterStatus.value = status
+    }
+
     fun toggleFilter() {
-        _showBlockedOnly.value = !_showBlockedOnly.value
+        _filterStatus.value = when (_filterStatus.value) {
+            LogFilterStatus.ALL -> LogFilterStatus.BLOCKED
+            LogFilterStatus.BLOCKED -> LogFilterStatus.ALLOWED
+            LogFilterStatus.ALLOWED -> LogFilterStatus.ALL
+        }
     }
 
     fun setSearchQuery(query: String) {
@@ -130,6 +161,12 @@ class LogViewModel(
         val current = _selectedIds.value.toMutableSet()
         if (current.contains(id)) current.remove(id) else current.add(id)
         _selectedIds.value = current
+        _selectionMode.value = current.isNotEmpty()
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+        _selectionMode.value = false
     }
 
     fun clearLogs() {
@@ -215,7 +252,11 @@ class LogViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>().applicationContext
             try {
-                val currentLogs = logs.value
+                val currentLogs = if (_selectionMode.value && _selectedIds.value.isNotEmpty()) {
+                    logs.value.filter { it.id in _selectedIds.value }
+                } else {
+                    logs.value
+                }
                 if (currentLogs.isEmpty()) {
                     _events.tryEmit(UiEvent.ToastRes(R.string.logs_empty))
                     return@launch
@@ -224,16 +265,16 @@ class LogViewModel(
                 val logsDir = java.io.File(context.cacheDir, "logs")
                 if (!logsDir.exists()) logsDir.mkdirs()
 
-                val fileName = "blockads_logs_${System.currentTimeMillis()}.csv"
+                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(java.util.Date(clock()))
+                val fileName = "blockads_dns_logs_$timeStamp.csv"
                 val file = java.io.File(logsDir, fileName)
 
-                PrintWriter(file).use { writer ->
-                    writer.println("Time,Domain,App,Blocked")
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                    currentLogs.forEach { log ->
-                        val timeStr = dateFormat.format(java.util.Date(log.timestamp))
-                        writer.println("$timeStr,${log.domain},${log.appName},${log.isBlocked}")
-                    }
+                file.bufferedWriter().use { writer ->
+                    DnsLogExporter.writeCsv(
+                        writer = writer,
+                        logs = currentLogs,
+                        filterNames = filterNames.value
+                    )
                 }
 
                 val authority = "${context.packageName}.fileprovider"

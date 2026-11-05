@@ -5,72 +5,49 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import app.pwhs.blockads.data.datastore.prefs.AppearancePreferences
+import app.pwhs.blockads.data.datastore.prefs.DnsPreferences
+import app.pwhs.blockads.data.datastore.prefs.FilterPreferences
+import app.pwhs.blockads.data.datastore.prefs.ShadowsocksPreferences
+import app.pwhs.blockads.data.datastore.prefs.TailscalePreferences
+import app.pwhs.blockads.data.datastore.prefs.VpnSecurityPreferences
+import app.pwhs.blockads.data.datastore.prefs.WireGuardPreferences
 import app.pwhs.blockads.data.entities.DnsProtocol
-import app.pwhs.blockads.data.entities.WireGuardConfig
+import app.pwhs.blockads.data.entities.ProxyProfile
+import app.pwhs.blockads.data.entities.ProxySubscription
+import app.pwhs.blockads.data.entities.ShadowsocksProfile
 import app.pwhs.blockads.data.entities.WireGuardProfile
-import app.pwhs.blockads.data.entities.WireGuardProfileList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "blockads_prefs")
+val Context.blockAdsDataStore: DataStore<Preferences> by preferencesDataStore(name = "blockads_prefs")
 
-class AppPreferences(private val context: Context) {
+class AppPreferences internal constructor(
+    private val dataStore: DataStore<Preferences>,
+    private val directBootPrefs: DirectBootPreferences,
+) {
+
+    constructor(context: Context) : this(context.blockAdsDataStore, DirectBootPreferences(context))
+
+    val dns = DnsPreferences(dataStore)
+    val appearance = AppearancePreferences(dataStore)
+    val filter = FilterPreferences(dataStore)
+    val wireguard = WireGuardPreferences(dataStore)
+    val vpnSecurity = VpnSecurityPreferences(dataStore)
+    val shadowsocks = ShadowsocksPreferences(dataStore)
+    val tailscale = TailscalePreferences(dataStore)
 
     companion object {
-        private val KEY_VPN_ENABLED = booleanPreferencesKey("vpn_enabled")
-        private val KEY_AUTO_RECONNECT = booleanPreferencesKey("auto_reconnect")
-        private val KEY_FILTER_URL = stringPreferencesKey("filter_url")
-        private val KEY_UPSTREAM_DNS = stringPreferencesKey("upstream_dns")
-        private val KEY_FALLBACK_DNS = stringPreferencesKey("fallback_dns")
-        private val KEY_DNS_PROTOCOL = stringPreferencesKey("dns_protocol")
-        private val KEY_DOH_URL = stringPreferencesKey("doh_url")
-        private val KEY_DNS_PROVIDER_ID = stringPreferencesKey("dns_provider_id")
-        private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
-        private val KEY_WHITELISTED_APPS = stringSetPreferencesKey("whitelisted_apps")
-        private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
-        private val KEY_APP_LANGUAGE = stringPreferencesKey("app_language")
-        private val KEY_AUTO_UPDATE_ENABLED = booleanPreferencesKey("auto_update_enabled")
-        private val KEY_AUTO_UPDATE_FREQUENCY = stringPreferencesKey("auto_update_frequency")
-        private val KEY_AUTO_UPDATE_WIFI_ONLY = booleanPreferencesKey("auto_update_wifi_only")
-        private val KEY_AUTO_UPDATE_NOTIFICATION = stringPreferencesKey("auto_update_notification")
-        private val KEY_DNS_RESPONSE_TYPE = stringPreferencesKey("dns_response_type")
-        private val KEY_PROTECTION_LEVEL = stringPreferencesKey("protection_level")
-        private val KEY_SAFE_SEARCH_ENABLED = booleanPreferencesKey("safe_search_enabled")
-        private val KEY_YOUTUBE_RESTRICTED_MODE = booleanPreferencesKey("youtube_restricted_mode")
-        private val KEY_DAILY_SUMMARY_ENABLED = booleanPreferencesKey("daily_summary_enabled")
-        private val KEY_MILESTONE_NOTIFICATIONS_ENABLED =
-            booleanPreferencesKey("milestone_notifications_enabled")
-        private val KEY_LAST_MILESTONE_BLOCKED = longPreferencesKey("last_milestone_blocked")
-        private val KEY_ACTIVE_PROFILE_ID = longPreferencesKey("active_profile_id")
-        private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
-        private val KEY_FIREWALL_ENABLED = booleanPreferencesKey("firewall_enabled")
-        private val KEY_SHOW_BOTTOM_NAV_LABELS = booleanPreferencesKey("show_bottom_nav_labels")
-        private val KEY_ROUTING_MODE = stringPreferencesKey("routing_mode")
-        // Legacy single-config key (v6.3.0 and earlier). Migrated lazily into
-        // KEY_WG_PROFILES_JSON; kept around so an older build can still read
-        // its own data if a user downgrades.
-        private val KEY_WG_CONFIG_JSON = stringPreferencesKey("wg_config_json")
-        private val KEY_WG_PROFILES_JSON = stringPreferencesKey("wg_profiles_json")
-        private val KEY_WG_ACTIVE_PROFILE_ID = stringPreferencesKey("wg_active_profile_id")
-        private val KEY_HTTPS_FILTERING_ENABLED = booleanPreferencesKey("https_filtering_enabled")
-        private val KEY_FILTER_HTTP3 = booleanPreferencesKey("filter_http3")
-        private val KEY_SELECTED_BROWSERS = stringSetPreferencesKey("selected_browsers")
-        private val KEY_NETWORK_SWITCH_DELAY_ENABLED = booleanPreferencesKey("network_switch_delay_enabled")
-        private val KEY_NETWORK_SWITCH_DELAY_SEC = intPreferencesKey("network_switch_delay_sec")
-        private val KEY_CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
-        private val KEY_HIDE_FROM_RECENTS = booleanPreferencesKey("hide_from_recents")
-        private val KEY_SPLIT_DNS_ZONES = stringPreferencesKey("split_dns_zones")
-        private val KEY_EXCLUDE_LAN = booleanPreferencesKey("exclude_lan")
-        private val KEY_TRUSTED_SSIDS = stringSetPreferencesKey("trusted_ssids")
-        private val KEY_PAUSE_ON_TRUSTED = booleanPreferencesKey("pause_on_trusted")
-        private val KEY_PAUSED_BY_TRUSTED = booleanPreferencesKey("paused_by_trusted")
-        private val KEY_PAUSED_TRUSTED_SSID = stringPreferencesKey("paused_trusted_ssid")
+        const val ROUTING_MODE_DIRECT = WireGuardPreferences.ROUTING_MODE_DIRECT
+        const val ROUTING_MODE_WIREGUARD = WireGuardPreferences.ROUTING_MODE_WIREGUARD
+        const val ROUTING_MODE_ROOT = WireGuardPreferences.ROUTING_MODE_ROOT
+        const val ROUTING_MODE_SHADOWSOCKS = ShadowsocksPreferences.ROUTING_MODE_SHADOWSOCKS
+        const val ROUTING_MODE_PROXY_VPN = "proxy_vpn"
+
+        // ── Lockdown Mode ────────────────────────────────────────────
         private val KEY_LOCKDOWN_ENABLED = booleanPreferencesKey("lockdown_enabled")
         private val KEY_LOCKDOWN_DURATION = longPreferencesKey("lockdown_duration")
         private val KEY_COOLDOWN_START_TIMESTAMP = longPreferencesKey("cooldown_start_timestamp")
@@ -78,81 +55,7 @@ class AppPreferences(private val context: Context) {
         private val KEY_LAST_ACTIVE_REALTIME = longPreferencesKey("last_active_realtime")
         private val KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED =
             booleanPreferencesKey("device_owner_restrictions_enabled")
-        private val KEY_RECORD_DNS_LOGS = booleanPreferencesKey("record_dns_logs")
 
-        const val ROUTING_MODE_DIRECT = "direct"
-        const val ROUTING_MODE_WIREGUARD = "wireguard"
-        const val ROUTING_MODE_ROOT = "root"
-
-        // Stable ID assigned to the migrated single config from v6.3.0,
-        // so the synthesized profile has a deterministic key during the
-        // brief window before [migrateLegacyWgConfigIfNeeded] persists it.
-        private const val LEGACY_PROFILE_ID = "legacy-default"
-
-        const val PROTECTION_BASIC = "BASIC"
-        const val PROTECTION_STANDARD = "STANDARD"
-        const val PROTECTION_STRICT = "STRICT"
-
-        const val THEME_SYSTEM = "system"
-        const val THEME_DARK = "dark"
-        const val THEME_LIGHT = "light"
-
-        const val ACCENT_GREEN = "green"
-        const val ACCENT_BLUE = "blue"
-        const val ACCENT_PURPLE = "purple"
-        const val ACCENT_ORANGE = "orange"
-        const val ACCENT_PINK = "pink"
-        const val ACCENT_TEAL = "teal"
-        const val ACCENT_GREY = "grey"
-        const val ACCENT_DYNAMIC = "dynamic"
-
-        const val LANGUAGE_SYSTEM = "system"
-        const val LANGUAGE_EN = "en"
-        const val LANGUAGE_VI = "vi"
-        const val LANGUAGE_JA = "ja"
-        const val LANGUAGE_KO = "ko"
-        const val LANGUAGE_ZH = "zh"
-        const val LANGUAGE_TH = "th"
-        const val LANGUAGE_ES = "es"
-        const val LANGUAGE_RU = "ru"
-        const val LANGUAGE_IT = "it"
-        const val LANGUAGE_AR = "ar"
-        const val LANGUAGE_TR = "tr"
-
-        const val LANGUAGE_PL = "pl"
-
-        const val LANGUAGE_IN = "in"
-
-        const val LANGUAGE_PT_BR = "pt-BR"
-
-        const val LANGUAGE_UK = "uk"
-
-        const val LANGUAGE_DE = "de"
-
-        const val LANGUAGE_CS = "cs"
-
-        const val LANGUAGE_IW = "iw"
-        const val LANGUAGE_FR = "fr"
-
-        const val UPDATE_FREQUENCY_6H = "6h"
-        const val UPDATE_FREQUENCY_12H = "12h"
-        const val UPDATE_FREQUENCY_24H = "24h"
-        const val UPDATE_FREQUENCY_48H = "48h"
-        const val UPDATE_FREQUENCY_MANUAL = "manual"
-
-        const val NOTIFICATION_SILENT = "silent"
-        const val NOTIFICATION_NORMAL = "normal"
-        const val NOTIFICATION_NONE = "none"
-
-        const val DNS_RESPONSE_NXDOMAIN = "nxdomain"
-        const val DNS_RESPONSE_REFUSED = "refused"
-        const val DNS_RESPONSE_CUSTOM_IP = "custom_ip"
-
-        const val DEFAULT_FILTER_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
-        const val DEFAULT_UPSTREAM_DNS = "9.9.9.9"
-        const val DEFAULT_FALLBACK_DNS = "94.140.14.14"
-        const val DEFAULT_DNS_PROTOCOL = "PLAIN"
-        const val DEFAULT_DOH_URL = "https://dns.quad9.net/dns-query"
         const val DEFAULT_LOCKDOWN_DURATION = 300000L
         val ALLOWED_LOCKDOWN_DURATIONS = setOf(
             60000L,
@@ -164,685 +67,369 @@ class AppPreferences(private val context: Context) {
             43200000L,
             86400000L
         )
+
+        const val PROXY_TYPE_WIREGUARD = ShadowsocksPreferences.PROXY_TYPE_WIREGUARD
+        const val PROXY_TYPE_SHADOWSOCKS = ShadowsocksPreferences.PROXY_TYPE_SHADOWSOCKS
+        const val PROXY_TYPE_NODE = ShadowsocksPreferences.PROXY_TYPE_NODE
+
+        const val PREFERRED_IP_AUTO = VpnSecurityPreferences.PREFERRED_IP_AUTO
+        const val PREFERRED_IP_IPV4 = VpnSecurityPreferences.PREFERRED_IP_IPV4
+        const val PREFERRED_IP_IPV6 = VpnSecurityPreferences.PREFERRED_IP_IPV6
+
+        const val PROTECTION_BASIC = FilterPreferences.PROTECTION_BASIC
+        const val PROTECTION_STANDARD = FilterPreferences.PROTECTION_STANDARD
+        const val PROTECTION_STRICT = FilterPreferences.PROTECTION_STRICT
+
+        const val BUILD_MODE_ONLINE = FilterPreferences.BUILD_MODE_ONLINE
+        const val BUILD_MODE_LOCAL = FilterPreferences.BUILD_MODE_LOCAL
+
+        const val BOTTOM_NAV_TAB_AUTO = AppearancePreferences.BOTTOM_NAV_TAB_AUTO
+        const val BOTTOM_NAV_TAB_FILTER = AppearancePreferences.BOTTOM_NAV_TAB_FILTER
+        const val BOTTOM_NAV_TAB_VPN = AppearancePreferences.BOTTOM_NAV_TAB_VPN
+
+        const val THEME_SYSTEM = AppearancePreferences.THEME_SYSTEM
+        const val THEME_DARK = AppearancePreferences.THEME_DARK
+        const val THEME_LIGHT = AppearancePreferences.THEME_LIGHT
+        const val THEME_OLED = AppearancePreferences.THEME_OLED
+
+        const val ACCENT_GREEN = AppearancePreferences.ACCENT_GREEN
+        const val ACCENT_BLUE = AppearancePreferences.ACCENT_BLUE
+        const val ACCENT_PURPLE = AppearancePreferences.ACCENT_PURPLE
+        const val ACCENT_ORANGE = AppearancePreferences.ACCENT_ORANGE
+        const val ACCENT_PINK = AppearancePreferences.ACCENT_PINK
+        const val ACCENT_TEAL = AppearancePreferences.ACCENT_TEAL
+        const val ACCENT_GREY = AppearancePreferences.ACCENT_GREY
+        const val ACCENT_DYNAMIC = AppearancePreferences.ACCENT_DYNAMIC
+
+        const val LANGUAGE_SYSTEM = AppearancePreferences.LANGUAGE_SYSTEM
+        const val LANGUAGE_EN = AppearancePreferences.LANGUAGE_EN
+        const val LANGUAGE_VI = AppearancePreferences.LANGUAGE_VI
+        const val LANGUAGE_JA = AppearancePreferences.LANGUAGE_JA
+        const val LANGUAGE_KO = AppearancePreferences.LANGUAGE_KO
+        const val LANGUAGE_ZH = AppearancePreferences.LANGUAGE_ZH
+        const val LANGUAGE_TH = AppearancePreferences.LANGUAGE_TH
+        const val LANGUAGE_ES = AppearancePreferences.LANGUAGE_ES
+        const val LANGUAGE_RU = AppearancePreferences.LANGUAGE_RU
+        const val LANGUAGE_IT = AppearancePreferences.LANGUAGE_IT
+        const val LANGUAGE_AR = AppearancePreferences.LANGUAGE_AR
+        const val LANGUAGE_TR = AppearancePreferences.LANGUAGE_TR
+        const val LANGUAGE_PL = AppearancePreferences.LANGUAGE_PL
+        const val LANGUAGE_IN = AppearancePreferences.LANGUAGE_IN
+        const val LANGUAGE_PT_BR = AppearancePreferences.LANGUAGE_PT_BR
+        const val LANGUAGE_UK = AppearancePreferences.LANGUAGE_UK
+        const val LANGUAGE_DE = AppearancePreferences.LANGUAGE_DE
+        const val LANGUAGE_CS = AppearancePreferences.LANGUAGE_CS
+        const val LANGUAGE_IW = AppearancePreferences.LANGUAGE_IW
+        const val LANGUAGE_FR = AppearancePreferences.LANGUAGE_FR
+        const val LANGUAGE_KK = AppearancePreferences.LANGUAGE_KK
+
+        const val UPDATE_FREQUENCY_6H = FilterPreferences.UPDATE_FREQUENCY_6H
+        const val UPDATE_FREQUENCY_12H = FilterPreferences.UPDATE_FREQUENCY_12H
+        const val UPDATE_FREQUENCY_24H = FilterPreferences.UPDATE_FREQUENCY_24H
+        const val UPDATE_FREQUENCY_48H = FilterPreferences.UPDATE_FREQUENCY_48H
+        const val UPDATE_FREQUENCY_MANUAL = FilterPreferences.UPDATE_FREQUENCY_MANUAL
+
+        const val NOTIFICATION_SILENT = FilterPreferences.NOTIFICATION_SILENT
+        const val NOTIFICATION_NORMAL = FilterPreferences.NOTIFICATION_NORMAL
+        const val NOTIFICATION_NONE = FilterPreferences.NOTIFICATION_NONE
+
+        const val DNS_RESPONSE_NXDOMAIN = DnsPreferences.DNS_RESPONSE_NXDOMAIN
+        const val DNS_RESPONSE_REFUSED = DnsPreferences.DNS_RESPONSE_REFUSED
+        const val DNS_RESPONSE_CUSTOM_IP = DnsPreferences.DNS_RESPONSE_CUSTOM_IP
+
+        const val DEFAULT_FILTER_URL = FilterPreferences.DEFAULT_FILTER_URL
+        const val DEFAULT_UPSTREAM_DNS = DnsPreferences.DEFAULT_UPSTREAM_DNS
+        const val DEFAULT_FALLBACK_DNS = DnsPreferences.DEFAULT_FALLBACK_DNS
+        const val DEFAULT_DNS_PROTOCOL = DnsPreferences.DEFAULT_DNS_PROTOCOL
+        const val DEFAULT_DOH_URL = DnsPreferences.DEFAULT_DOH_URL
+        const val CUSTOM_DNS_PROVIDER_ID = "custom"
     }
 
-    val vpnEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_VPN_ENABLED] ?: false
-    }
+    // ── VPN & Security Flows ─────────────────────────────────────────────
+    val vpnEnabled: Flow<Boolean> get() = vpnSecurity.vpnEnabled
+    val autoReconnect: Flow<Boolean> get() = vpnSecurity.autoReconnect
+    val onboardingCompleted: Flow<Boolean> get() = vpnSecurity.onboardingCompleted
+    val whitelistedApps: Flow<Set<String>> get() = vpnSecurity.whitelistedApps
+    val dailySummaryEnabled: Flow<Boolean> get() = vpnSecurity.dailySummaryEnabled
+    val milestoneNotificationsEnabled: Flow<Boolean> get() = vpnSecurity.milestoneNotificationsEnabled
+    val lastMilestoneBlocked: Flow<Long> get() = vpnSecurity.lastMilestoneBlocked
+    val lastSeenMilestoneDialog: Flow<Long> get() = vpnSecurity.lastSeenMilestoneDialog
+    val activeProfileId: Flow<Long> get() = vpnSecurity.activeProfileId
+    val recordDnsLogs: Flow<Boolean> get() = vpnSecurity.recordDnsLogs
+    val firewallEnabled: Flow<Boolean> get() = vpnSecurity.firewallEnabled
+    val crashReportingEnabled: Flow<Boolean> get() = vpnSecurity.crashReportingEnabled
+    val hideFromRecents: Flow<Boolean> get() = vpnSecurity.hideFromRecents
+    val trustedSsids: Flow<Set<String>> get() = vpnSecurity.trustedSsids
+    val pauseOnTrustedEnabled: Flow<Boolean> get() = vpnSecurity.pauseOnTrustedEnabled
+    val useSystemDnsOnTrustedEnabled: Flow<Boolean> get() = vpnSecurity.useSystemDnsOnTrustedEnabled
+    val pausedByTrusted: Flow<Boolean> get() = vpnSecurity.pausedByTrusted
+    val pausedTrustedSsid: Flow<String> get() = vpnSecurity.pausedTrustedSsid
+    val httpsFilteringEnabled: Flow<Boolean> get() = vpnSecurity.httpsFilteringEnabled
+    val filterHttp3: Flow<Boolean> get() = vpnSecurity.filterHttp3
+    val vpnRevokedByAnotherApp: Flow<Boolean> get() = vpnSecurity.vpnRevokedByAnotherApp
+    val stabilityTipDismissed: Flow<Boolean> get() = vpnSecurity.stabilityTipDismissed
+    val stabilityTipDismissedAt: Flow<Long> get() = vpnSecurity.stabilityTipDismissedAt
+    val stabilityTipLastBatteryIgnored: Flow<Boolean> get() = vpnSecurity.stabilityTipLastBatteryIgnored
+    val stabilityTipLastAlwaysOn: Flow<Boolean> get() = vpnSecurity.stabilityTipLastAlwaysOn
+    val dismissedFeatureTips: Flow<Set<String>> get() = vpnSecurity.dismissedFeatureTips
+    val preferredIPType: Flow<String> get() = vpnSecurity.preferredIPType
 
-    val lockdownEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    // ── DNS Flows ────────────────────────────────────────────────────────
+    val upstreamDns: Flow<String> get() = dns.upstreamDns
+    val fallbackDns: Flow<String> get() = dns.fallbackDns
+    val dnsProtocol: Flow<DnsProtocol> get() = dns.dnsProtocol
+    val dohUrl: Flow<String> get() = dns.dohUrl
+    val odohRelayUrl: Flow<String> get() = dns.odohRelayUrl
+    val dnsProviderId: Flow<String?> get() = dns.dnsProviderId
+    val dnsResponseType: Flow<String> get() = dns.dnsResponseType
+    val splitDnsZones: Flow<String> get() = dns.splitDnsZones
+    val blockDohBypass: Flow<Boolean> get() = dns.blockDohBypass
+    val blockWebRtcLeak: Flow<Boolean> get() = dns.blockWebRtcLeak
+
+    // ── Lockdown Mode Flows ──────────────────────────────────────────────
+    val lockdownEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_LOCKDOWN_ENABLED] ?: false
     }
 
-    val lockdownDuration: Flow<Long> = context.dataStore.data.map { prefs ->
+    val lockdownDuration: Flow<Long> = dataStore.data.map { prefs ->
         val duration = prefs[KEY_LOCKDOWN_DURATION] ?: DEFAULT_LOCKDOWN_DURATION
         if (duration in ALLOWED_LOCKDOWN_DURATIONS) duration else DEFAULT_LOCKDOWN_DURATION
     }
 
-    val cooldownStartTimestamp: Flow<Long> = context.dataStore.data.map { prefs ->
+    val cooldownStartTimestamp: Flow<Long> = dataStore.data.map { prefs ->
         prefs[KEY_COOLDOWN_START_TIMESTAMP] ?: 0L
     }
 
-    val lastActiveTimestamp: Flow<Long> = context.dataStore.data.map { prefs ->
+    val lastActiveTimestamp: Flow<Long> = dataStore.data.map { prefs ->
         prefs[KEY_LAST_ACTIVE_TIMESTAMP] ?: 0L
     }
 
-    val lastActiveRealtime: Flow<Long> = context.dataStore.data.map { prefs ->
+    val lastActiveRealtime: Flow<Long> = dataStore.data.map { prefs ->
         prefs[KEY_LAST_ACTIVE_REALTIME] ?: 0L
     }
 
-    val deviceOwnerRestrictionsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+    val deviceOwnerRestrictionsEnabled: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED] ?: true
     }
 
-    val autoReconnect: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUTO_RECONNECT] ?: true
-    }
+    // ── Appearance Flows ─────────────────────────────────────────────────
+    val themeMode: Flow<String> get() = appearance.themeMode
+    val appLanguage: Flow<String> get() = appearance.appLanguage
+    val accentColor: Flow<String> get() = appearance.accentColor
+    val showBottomNavLabels: Flow<Boolean> get() = appearance.showBottomNavLabels
+    val bottomNavSecondaryTab: Flow<String> get() = appearance.bottomNavSecondaryTab
+    suspend fun setBottomNavSecondaryTab(tab: String) = appearance.setBottomNavSecondaryTab(tab)
 
-    val networkSwitchDelayEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_NETWORK_SWITCH_DELAY_ENABLED] ?: false
-    }
+    // ── Filter Flows ─────────────────────────────────────────────────────
+    val filterUrl: Flow<String> get() = filter.filterUrl
+    val autoUpdateEnabled: Flow<Boolean> get() = filter.autoUpdateEnabled
+    val autoUpdateFrequency: Flow<String> get() = filter.autoUpdateFrequency
+    val autoUpdateWifiOnly: Flow<Boolean> get() = filter.autoUpdateWifiOnly
+    val autoUpdateNotification: Flow<String> get() = filter.autoUpdateNotification
+    val protectionLevel: Flow<String> get() = filter.protectionLevel
+    val safeSearchEnabled: Flow<Boolean> get() = filter.safeSearchEnabled
+    val youtubeRestrictedMode: Flow<Boolean> get() = filter.youtubeRestrictedMode
+    val geoIpCustomUrl: Flow<String> get() = filter.geoIpCustomUrl
+    val geoIpAutoUpdate: Flow<Boolean> get() = filter.geoIpAutoUpdate
+    val filterBuildMode: Flow<String> get() = filter.filterBuildMode
+    val customFilterTags: Flow<Set<String>> get() = filter.customFilterTags
+    suspend fun addCustomFilterTag(tag: String) = filter.addCustomFilterTag(tag)
+    suspend fun removeCustomFilterTag(tag: String) = filter.removeCustomFilterTag(tag)
 
-    val networkSwitchDelaySec: Flow<Int> = context.dataStore.data.map { prefs ->
-        prefs[KEY_NETWORK_SWITCH_DELAY_SEC] ?: 30
-    }
+    // ── WireGuard Flows ──────────────────────────────────────────────────
+    val routingMode: Flow<String> get() = wireguard.routingMode
+    val wgProfiles: Flow<List<WireGuardProfile>> get() = wireguard.wgProfiles
+    val wgActiveProfileId: Flow<String?> get() = wireguard.wgActiveProfileId
+    val excludeLan: Flow<Boolean> get() = wireguard.excludeLan
+    val allowAppBypass: Flow<Boolean> get() = wireguard.allowAppBypass
 
-    val filterUrl: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_FILTER_URL] ?: DEFAULT_FILTER_URL
-    }
-
-    val upstreamDns: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_UPSTREAM_DNS] ?: DEFAULT_UPSTREAM_DNS
-    }
-
-    val fallbackDns: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_FALLBACK_DNS] ?: DEFAULT_FALLBACK_DNS
-    }
-
-    val dnsProtocol: Flow<DnsProtocol> = context.dataStore.data.map { prefs ->
-        val protocolString = prefs[KEY_DNS_PROTOCOL] ?: DEFAULT_DNS_PROTOCOL
-        try {
-            DnsProtocol.valueOf(protocolString)
-        } catch (e: IllegalArgumentException) {
-            DnsProtocol.PLAIN
-        }
-    }
-
-    val dohUrl: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DOH_URL] ?: DEFAULT_DOH_URL
-    }
-
-    val onboardingCompleted: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_ONBOARDING_COMPLETED] ?: false
-    }
-
-    val whitelistedApps: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[KEY_WHITELISTED_APPS] ?: emptySet()
-    }
-
-    val themeMode: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_THEME_MODE] ?: THEME_SYSTEM
-    }
-
-    val appLanguage: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_APP_LANGUAGE] ?: LANGUAGE_SYSTEM
-    }
-
-    val autoUpdateEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUTO_UPDATE_ENABLED] ?: true
-    }
-
-    val autoUpdateFrequency: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUTO_UPDATE_FREQUENCY] ?: UPDATE_FREQUENCY_24H
-    }
-
-    val autoUpdateWifiOnly: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUTO_UPDATE_WIFI_ONLY] ?: true
-    }
-
-    val autoUpdateNotification: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_AUTO_UPDATE_NOTIFICATION] ?: NOTIFICATION_SILENT
-    }
-
-    val dnsProviderId: Flow<String?> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DNS_PROVIDER_ID]
-    }
-
-    val dnsResponseType: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DNS_RESPONSE_TYPE] ?: DNS_RESPONSE_CUSTOM_IP
-    }
-
-    val protectionLevel: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PROTECTION_LEVEL] ?: PROTECTION_STANDARD
-    }
-
-    val safeSearchEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SAFE_SEARCH_ENABLED] ?: false
-    }
-
-    val youtubeRestrictedMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_YOUTUBE_RESTRICTED_MODE] ?: false
-    }
-
-    val dailySummaryEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DAILY_SUMMARY_ENABLED] ?: false
-    }
-
-    val milestoneNotificationsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_MILESTONE_NOTIFICATIONS_ENABLED] ?: false
-    }
-
-    val lastMilestoneBlocked: Flow<Long> = context.dataStore.data.map { prefs ->
-        prefs[KEY_LAST_MILESTONE_BLOCKED] ?: 0L
-    }
-
-    val activeProfileId: Flow<Long> =
-        context.dataStore.data.map { prefs ->
-            prefs[KEY_ACTIVE_PROFILE_ID] ?: -1L
-        }
-
-    val accentColor: Flow<String> =
-        context.dataStore.data.map { prefs ->
-            prefs[KEY_ACCENT_COLOR] ?: ACCENT_GREEN
-        }
-
-    val recordDnsLogs: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_RECORD_DNS_LOGS] ?: true
-    }
-
-    val firewallEnabled: Flow<Boolean> =
-        context.dataStore.data.map { prefs ->
-            prefs[KEY_FIREWALL_ENABLED] ?: false
-        }
-
-    val showBottomNavLabels: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SHOW_BOTTOM_NAV_LABELS] ?: true
-    }
-
-    val routingMode: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_ROUTING_MODE] ?: ROUTING_MODE_DIRECT
-    }
-
-    val wgProfiles: Flow<List<WireGuardProfile>> = context.dataStore.data.map { prefs ->
-        readProfilesFromPrefs(prefs)
-    }
-
-    val wgActiveProfileId: Flow<String?> = context.dataStore.data.map { prefs ->
-        readActiveIdFromPrefs(prefs)
-    }
-
-    private fun readProfilesFromPrefs(prefs: Preferences): List<WireGuardProfile> {
-        prefs[KEY_WG_PROFILES_JSON]?.let {
-            return WireGuardProfileList.fromJson(it).profiles
-        }
-        // Lazy migration: synthesize a one-element list from the legacy key
-        // so callers see consistent state even before the persisting migration
-        // runs. The actual persist happens in [migrateLegacyWgConfigIfNeeded].
-        prefs[KEY_WG_CONFIG_JSON]?.let { legacy ->
-            val cfg = try {
-                WireGuardConfig.fromJson(legacy)
-            } catch (_: Exception) {
-                return emptyList()
-            }
-            return listOf(WireGuardProfile(LEGACY_PROFILE_ID, "Default", cfg))
-        }
-        return emptyList()
-    }
-
-    private fun readActiveIdFromPrefs(prefs: Preferences): String? {
-        prefs[KEY_WG_ACTIVE_PROFILE_ID]?.let { return it }
-        // Pre-migration: the lone legacy profile is implicitly active.
-        if (prefs[KEY_WG_CONFIG_JSON] != null) return LEGACY_PROFILE_ID
-        return null
-    }
-
-    val crashReportingEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_CRASH_REPORTING_ENABLED] ?: false
-    }
-
-    val hideFromRecents: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_HIDE_FROM_RECENTS] ?: false
-    }
-
-    val splitDnsZones: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_SPLIT_DNS_ZONES] ?: ""
-    }
-
-    val excludeLan: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_EXCLUDE_LAN] ?: false
-    }
-
-    // ── Trusted Wi-Fi networks (#197) ──────────────────────────────
-    // SSIDs where BlockAds auto-pauses; resumes when leaving.
-    val trustedSsids: Flow<Set<String>> = context.dataStore.data.map { prefs ->
-        prefs[KEY_TRUSTED_SSIDS] ?: emptySet()
-    }
-
-    val pauseOnTrustedEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PAUSE_ON_TRUSTED] ?: false
-    }
-
-    suspend fun setTrustedSsids(ssids: Set<String>) {
-        context.dataStore.edit { it[KEY_TRUSTED_SSIDS] = ssids }
-    }
-
-    suspend fun toggleTrustedSsid(ssid: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[KEY_TRUSTED_SSIDS] ?: emptySet()
-            prefs[KEY_TRUSTED_SSIDS] = if (ssid in current) current - ssid else current + ssid
-        }
-    }
-
-    suspend fun setPauseOnTrustedEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_PAUSE_ON_TRUSTED] = enabled }
-    }
-
-    suspend fun getTrustedSsidsSnapshot(): Set<String> =
-        context.dataStore.data.map { it[KEY_TRUSTED_SSIDS] ?: emptySet() }.first()
-
-    suspend fun getPauseOnTrustedEnabledSnapshot(): Boolean =
-        context.dataStore.data.map { it[KEY_PAUSE_ON_TRUSTED] ?: false }.first()
-
-    // Internal flag: true when WE auto-paused due to a trusted network, so
-    // we only auto-resume what we paused (not a user-initiated stop).
-    // Observed by the Home UI to show a distinct "paused on trusted network"
-    // state instead of plain "Unprotected".
-    val pausedByTrusted: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PAUSED_BY_TRUSTED] ?: false
-    }
-
-    /** SSID we auto-paused on, for display. Empty when not paused. */
-    val pausedTrustedSsid: Flow<String> = context.dataStore.data.map { prefs ->
-        prefs[KEY_PAUSED_TRUSTED_SSID] ?: ""
-    }
-
-    suspend fun setPausedByTrusted(value: Boolean, ssid: String = "") {
-        context.dataStore.edit {
-            it[KEY_PAUSED_BY_TRUSTED] = value
-            it[KEY_PAUSED_TRUSTED_SSID] = if (value) ssid else ""
-        }
-    }
-
-    suspend fun getPausedByTrustedSnapshot(): Boolean =
-        context.dataStore.data.map { it[KEY_PAUSED_BY_TRUSTED] ?: false }.first()
-
+    // ── Mutator & Snapshot Delegates ─────────────────────────────────────
     suspend fun setVpnEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_VPN_ENABLED] = enabled
-        }
+        vpnSecurity.setVpnEnabled(enabled)
+        directBootPrefs.wasVpnEnabled = enabled
     }
 
+    // ── Lockdown Mode Mutators ───────────────────────────────────────────
     suspend fun setLockdownEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_LOCKDOWN_ENABLED] = enabled
         }
     }
 
     suspend fun setDeviceOwnerRestrictionsEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_DEVICE_OWNER_RESTRICTIONS_ENABLED] = enabled
         }
     }
 
     suspend fun setLockdownDuration(ms: Long) {
         val validMs = if (ms in ALLOWED_LOCKDOWN_DURATIONS) ms else DEFAULT_LOCKDOWN_DURATION
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_LOCKDOWN_DURATION] = validMs
         }
     }
 
     suspend fun setCooldownStartTimestamp(timestamp: Long) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_COOLDOWN_START_TIMESTAMP] = timestamp
         }
     }
 
-    suspend fun setLastActiveTimestamp(timestamp: Long) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_LAST_ACTIVE_TIMESTAMP] = timestamp
-        }
-    }
-
-    suspend fun setLastActiveRealtime(timestamp: Long) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_LAST_ACTIVE_REALTIME] = timestamp
-        }
-    }
-
     suspend fun setLastActiveBaselines(wallTimestamp: Long, realtimeTimestamp: Long) {
-        context.dataStore.edit { prefs ->
+        dataStore.edit { prefs ->
             prefs[KEY_LAST_ACTIVE_TIMESTAMP] = wallTimestamp
             prefs[KEY_LAST_ACTIVE_REALTIME] = realtimeTimestamp
         }
     }
 
     suspend fun setAutoReconnect(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_AUTO_RECONNECT] = enabled
-        }
+        vpnSecurity.setAutoReconnect(enabled)
+        directBootPrefs.autoReconnect = enabled
     }
 
-    suspend fun setFilterUrl(url: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_FILTER_URL] = url
-        }
-    }
+    suspend fun setOnboardingCompleted(completed: Boolean) = vpnSecurity.setOnboardingCompleted(completed)
+    suspend fun setWhitelistedApps(apps: Set<String>) = vpnSecurity.setWhitelistedApps(apps)
+    suspend fun toggleWhitelistedApp(packageName: String) = vpnSecurity.toggleWhitelistedApp(packageName)
+    suspend fun getWhitelistedAppsSnapshot(): Set<String> = vpnSecurity.getWhitelistedAppsSnapshot()
+    suspend fun setDailySummaryEnabled(enabled: Boolean) = vpnSecurity.setDailySummaryEnabled(enabled)
+    suspend fun setMilestoneNotificationsEnabled(enabled: Boolean) = vpnSecurity.setMilestoneNotificationsEnabled(enabled)
+    suspend fun setLastMilestoneBlocked(count: Long) = vpnSecurity.setLastMilestoneBlocked(count)
+    suspend fun setLastSeenMilestoneDialog(milestone: Long) = vpnSecurity.setLastSeenMilestoneDialog(milestone)
+    suspend fun setActiveProfileId(id: Long) = vpnSecurity.setActiveProfileId(id)
+    suspend fun setRecordDnsLogs(enabled: Boolean) = vpnSecurity.setRecordDnsLogs(enabled)
+    suspend fun setFirewallEnabled(enabled: Boolean) = vpnSecurity.setFirewallEnabled(enabled)
+    suspend fun setHttpsFilteringEnabled(enabled: Boolean) = vpnSecurity.setHttpsFilteringEnabled(enabled)
+    suspend fun getHttpsFilteringEnabledSnapshot(): Boolean = vpnSecurity.getHttpsFilteringEnabledSnapshot()
+    suspend fun setFilterHttp3(enabled: Boolean) = vpnSecurity.setFilterHttp3(enabled)
+    suspend fun getFilterHttp3Snapshot(): Boolean = vpnSecurity.getFilterHttp3Snapshot()
+    suspend fun setSelectedBrowsers(packages: Set<String>) = vpnSecurity.setSelectedBrowsers(packages)
+    fun getSelectedBrowsersSnapshot(): Set<String> = vpnSecurity.getSelectedBrowsersSnapshot()
+    fun getSelectedBrowsersOrNullSnapshot(): Set<String>? = vpnSecurity.getSelectedBrowsersOrNullSnapshot()
+    suspend fun setCrashReportingEnabled(enabled: Boolean) = vpnSecurity.setCrashReportingEnabled(enabled)
+    suspend fun setHideFromRecents(enabled: Boolean) = vpnSecurity.setHideFromRecents(enabled)
+    suspend fun setTrustedSsids(ssids: Set<String>) = vpnSecurity.setTrustedSsids(ssids)
+    suspend fun toggleTrustedSsid(ssid: String) = vpnSecurity.toggleTrustedSsid(ssid)
+    suspend fun setPauseOnTrustedEnabled(enabled: Boolean) = vpnSecurity.setPauseOnTrustedEnabled(enabled)
+    suspend fun setUseSystemDnsOnTrustedEnabled(enabled: Boolean) = vpnSecurity.setUseSystemDnsOnTrustedEnabled(enabled)
+    suspend fun getUseSystemDnsOnTrustedEnabledSnapshot(): Boolean = vpnSecurity.getUseSystemDnsOnTrustedEnabledSnapshot()
+    suspend fun getTrustedSsidsSnapshot(): Set<String> = vpnSecurity.getTrustedSsidsSnapshot()
+    suspend fun getPauseOnTrustedEnabledSnapshot(): Boolean = vpnSecurity.getPauseOnTrustedEnabledSnapshot()
+    suspend fun setPausedByTrusted(value: Boolean, ssid: String = "") = vpnSecurity.setPausedByTrusted(value, ssid)
+    suspend fun getPausedByTrustedSnapshot(): Boolean = vpnSecurity.getPausedByTrustedSnapshot()
+    suspend fun setVpnRevokedByAnotherApp(value: Boolean) = vpnSecurity.setVpnRevokedByAnotherApp(value)
+    suspend fun setStabilityTipDismissed(value: Boolean) = vpnSecurity.setStabilityTipDismissed(value)
+    suspend fun recordStabilityTipDismissed(batteryIgnored: Boolean, alwaysOn: Boolean) =
+        vpnSecurity.recordStabilityTipDismissed(batteryIgnored, alwaysOn)
+    suspend fun updateStabilityTipHardwareState(batteryIgnored: Boolean, alwaysOn: Boolean) =
+        vpnSecurity.updateStabilityTipHardwareState(batteryIgnored, alwaysOn)
+    suspend fun dismissFeatureTip(tipId: String) = vpnSecurity.dismissFeatureTip(tipId)
+    suspend fun getPreferredIPTypeSnapshot(): String = vpnSecurity.getPreferredIPTypeSnapshot()
+    suspend fun setPreferredIPType(type: String) = vpnSecurity.setPreferredIPType(type)
 
-    suspend fun setUpstreamDns(dns: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_UPSTREAM_DNS] = dns
-        }
-    }
+    suspend fun setUpstreamDns(dnsServer: String) = dns.setUpstreamDns(dnsServer)
+    suspend fun setFallbackDns(dnsServer: String) = dns.setFallbackDns(dnsServer)
+    suspend fun setDnsProtocol(protocol: DnsProtocol) = dns.setDnsProtocol(protocol)
+    suspend fun setDohUrl(url: String) = dns.setDohUrl(url)
+    suspend fun setOdohRelayUrl(url: String) = dns.setOdohRelayUrl(url)
+    suspend fun setDnsProviderId(providerId: String?) = dns.setDnsProviderId(providerId)
+    suspend fun setDnsResponseType(responseType: String) = dns.setDnsResponseType(responseType)
+    suspend fun setSplitDnsZones(zones: String) = dns.setSplitDnsZones(zones)
+    suspend fun setBlockDohBypass(enabled: Boolean) = dns.setBlockDohBypass(enabled)
+    suspend fun getBlockDohBypassSnapshot(): Boolean = dns.getBlockDohBypassSnapshot()
+    suspend fun setBlockWebRtcLeak(enabled: Boolean) = dns.setBlockWebRtcLeak(enabled)
+    suspend fun getBlockWebRtcLeakSnapshot(): Boolean = dns.getBlockWebRtcLeakSnapshot()
 
-    suspend fun setFallbackDns(dns: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_FALLBACK_DNS] = dns
-        }
-    }
+    suspend fun setThemeMode(mode: String) = appearance.setThemeMode(mode)
+    suspend fun setAppLanguage(language: String) = appearance.setAppLanguage(language)
+    suspend fun setAccentColor(color: String) = appearance.setAccentColor(color)
+    suspend fun setShowBottomNavLabels(show: Boolean) = appearance.setShowBottomNavLabels(show)
 
-    suspend fun setDnsProtocol(protocol: DnsProtocol) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_DNS_PROTOCOL] = protocol.name
-        }
-    }
-
-    suspend fun setDohUrl(url: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_DOH_URL] = url
-        }
-    }
-
-    suspend fun setDnsProviderId(providerId: String?) {
-        context.dataStore.edit { prefs ->
-            if (providerId == null) {
-                prefs.remove(KEY_DNS_PROVIDER_ID)
-            } else {
-                prefs[KEY_DNS_PROVIDER_ID] = providerId
-            }
-        }
-    }
-
-    suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_ONBOARDING_COMPLETED] = completed
-        }
-    }
-
-    suspend fun setWhitelistedApps(apps: Set<String>) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_WHITELISTED_APPS] = apps
-        }
-    }
-
-    suspend fun toggleWhitelistedApp(packageName: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[KEY_WHITELISTED_APPS] ?: emptySet()
-            prefs[KEY_WHITELISTED_APPS] = if (packageName in current) {
-                current - packageName
-            } else {
-                current + packageName
-            }
-        }
-    }
-
-    suspend fun setThemeMode(mode: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_THEME_MODE] = mode
-        }
-    }
-
-    suspend fun setAppLanguage(language: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_APP_LANGUAGE] = language
-        }
-    }
-
-    suspend fun setAutoUpdateEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_AUTO_UPDATE_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setAutoUpdateFrequency(frequency: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_AUTO_UPDATE_FREQUENCY] = frequency
-        }
-    }
-
-    suspend fun setAutoUpdateWifiOnly(wifiOnly: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_AUTO_UPDATE_WIFI_ONLY] = wifiOnly
-        }
-    }
-
-    suspend fun setAutoUpdateNotification(notificationType: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_AUTO_UPDATE_NOTIFICATION] = notificationType
-        }
-    }
-
-    suspend fun setDnsResponseType(responseType: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_DNS_RESPONSE_TYPE] = responseType
-        }
-    }
-
-    suspend fun setProtectionLevel(level: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_PROTECTION_LEVEL] = level
-        }
-    }
-
-    suspend fun setSafeSearchEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_SAFE_SEARCH_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setYoutubeRestrictedMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_YOUTUBE_RESTRICTED_MODE] = enabled
-        }
-    }
-
-    suspend fun setDailySummaryEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_DAILY_SUMMARY_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setMilestoneNotificationsEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_MILESTONE_NOTIFICATIONS_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setLastMilestoneBlocked(count: Long) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_LAST_MILESTONE_BLOCKED] = count
-        }
-    }
-
-    suspend fun setActiveProfileId(id: Long) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_ACTIVE_PROFILE_ID] = id
-        }
-    }
-
-    suspend fun setAccentColor(color: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_ACCENT_COLOR] = color
-        }
-    }
-
-    suspend fun setRecordDnsLogs(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_RECORD_DNS_LOGS] = enabled
-        }
-    }
-
-    suspend fun setFirewallEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_FIREWALL_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setNetworkSwitchDelayEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_NETWORK_SWITCH_DELAY_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setNetworkSwitchDelaySec(seconds: Int) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_NETWORK_SWITCH_DELAY_SEC] = seconds.coerceIn(5, 120)
-        }
-    }
-
-    suspend fun setShowBottomNavLabels(show: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_SHOW_BOTTOM_NAV_LABELS] = show
-        }
-    }
-
-    suspend fun getWhitelistedAppsSnapshot(): Set<String> {
-        return whitelistedApps.first()
-    }
+    suspend fun setFilterUrl(url: String) = filter.setFilterUrl(url)
+    suspend fun setAutoUpdateEnabled(enabled: Boolean) = filter.setAutoUpdateEnabled(enabled)
+    suspend fun setAutoUpdateFrequency(frequency: String) = filter.setAutoUpdateFrequency(frequency)
+    suspend fun setAutoUpdateWifiOnly(wifiOnly: Boolean) = filter.setAutoUpdateWifiOnly(wifiOnly)
+    suspend fun setAutoUpdateNotification(type: String) = filter.setAutoUpdateNotification(type)
+    suspend fun setProtectionLevel(level: String) = filter.setProtectionLevel(level)
+    suspend fun setSafeSearchEnabled(enabled: Boolean) = filter.setSafeSearchEnabled(enabled)
+    suspend fun setYoutubeRestrictedMode(enabled: Boolean) = filter.setYoutubeRestrictedMode(enabled)
+    suspend fun setGeoIpCustomUrl(url: String) = filter.setGeoIpCustomUrl(url)
+    suspend fun setGeoIpAutoUpdate(enabled: Boolean) = filter.setGeoIpAutoUpdate(enabled)
+    suspend fun setFilterBuildMode(mode: String) = filter.setFilterBuildMode(mode)
+    suspend fun getFilterBuildModeSnapshot(): String = filter.getFilterBuildModeSnapshot()
 
     suspend fun setRoutingMode(mode: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_ROUTING_MODE] = mode
+        wireguard.setRoutingMode(mode)
+        directBootPrefs.routingMode = mode
+    }
+    suspend fun getRoutingModeSnapshot(): String = wireguard.getRoutingModeSnapshot()
+    suspend fun getWgConfigJsonSnapshot(): String? = wireguard.getWgConfigJsonSnapshot()
+    suspend fun getWgProfilesSnapshot(): List<WireGuardProfile> = wireguard.getWgProfilesSnapshot()
+    suspend fun getActiveWgProfileSnapshot(): WireGuardProfile? = wireguard.getActiveWgProfileSnapshot()
+    suspend fun addOrUpdateWgProfile(profile: WireGuardProfile, makeActive: Boolean = false) =
+        wireguard.addOrUpdateWgProfile(profile, makeActive)
+    suspend fun removeWgProfile(id: String) = wireguard.removeWgProfile(id)
+    suspend fun setActiveWgProfile(id: String) = wireguard.setActiveWgProfile(id)
+    suspend fun renameWgProfile(id: String, name: String) = wireguard.renameWgProfile(id, name)
+    suspend fun clearAllWgProfiles() = wireguard.clearAllWgProfiles()
+    suspend fun migrateLegacyWgConfigIfNeeded() = wireguard.migrateLegacyWgConfigIfNeeded()
+    suspend fun setExcludeLan(enabled: Boolean) = wireguard.setExcludeLan(enabled)
+    suspend fun setAllowAppBypass(enabled: Boolean) = wireguard.setAllowAppBypass(enabled)
+
+    val lastSubscriptionUrl: Flow<String?> get() = shadowsocks.lastSubscriptionUrl
+    val lastSubscriptionUpdated: Flow<Long?> get() = shadowsocks.lastSubscriptionUpdated
+    val proxySubscriptions: Flow<List<ProxySubscription>> get() = shadowsocks.subscriptions
+    suspend fun setLastSubscriptionUrl(url: String) = shadowsocks.setLastSubscriptionUrl(url)
+    suspend fun getLastSubscriptionUrlSnapshot(): String? = shadowsocks.getLastSubscriptionUrlSnapshot()
+    suspend fun removeDuplicateWgProfiles(): Int = wireguard.removeDuplicateWgProfiles()
+    suspend fun getProxySubscriptionsSnapshot(): List<ProxySubscription> = proxySubscriptions.first()
+    suspend fun addOrUpdateSubscription(subscription: ProxySubscription) = shadowsocks.addOrUpdateSubscription(subscription)
+    suspend fun removeSubscription(id: String, deleteNodes: Boolean = true) = shadowsocks.removeSubscription(id, deleteNodes)
+    suspend fun syncSubscriptionProfiles(subscription: ProxySubscription, newProfiles: List<ProxyProfile>) =
+        shadowsocks.syncSubscriptionProfiles(subscription, newProfiles)
+    suspend fun removeDuplicateProfiles(): Int = shadowsocks.removeDuplicateProfiles()
+
+    val activeProxyType: Flow<String> get() = shadowsocks.activeProxyType
+    val proxyProfiles: Flow<List<ProxyProfile>> get() = shadowsocks.proxyProfiles
+    val activeProxyProfileId: Flow<String?> get() = shadowsocks.activeProxyProfileId
+    val activeProxyProfile: Flow<ProxyProfile?> get() = shadowsocks.activeProxyProfile
+
+    suspend fun getActiveProxyProfileSnapshot(): ProxyProfile? = shadowsocks.getActiveProxyProfileSnapshot()
+    suspend fun setActiveProxyProfileId(id: String) = shadowsocks.setActiveProxyProfileId(id)
+    suspend fun addProxyProfile(profile: ProxyProfile) = shadowsocks.addProxyProfile(profile)
+    suspend fun updateProxyProfile(profile: ProxyProfile) = shadowsocks.updateProxyProfile(profile)
+    suspend fun getProxyProfile(id: String): ProxyProfile? = shadowsocks.getProxyProfile(id)
+    suspend fun addProxyProfiles(profiles: List<ProxyProfile>) = shadowsocks.addProxyProfiles(profiles)
+    suspend fun deleteProxyProfile(id: String) = shadowsocks.deleteProxyProfile(id)
+    suspend fun renameProxyProfile(id: String, newName: String) = shadowsocks.renameProxyProfile(id, newName)
+
+    val ssProfiles: Flow<List<ShadowsocksProfile>> get() = shadowsocks.ssProfiles
+    val activeSsProfileId: Flow<String?> get() = shadowsocks.activeSsProfileId
+    val ssProfile: Flow<ShadowsocksProfile?> get() = shadowsocks.ssProfile
+
+    suspend fun getSsProfileSnapshot(): ShadowsocksProfile? = shadowsocks.getSsProfileSnapshot()
+    suspend fun getActiveProxyTypeSnapshot(): String = shadowsocks.getActiveProxyTypeSnapshot()
+    suspend fun setActiveProxyType(type: String) = shadowsocks.setActiveProxyType(type)
+    suspend fun setActiveSsProfileId(id: String) = shadowsocks.setActiveProfileId(id)
+    suspend fun addSsProfile(profile: ShadowsocksProfile) = shadowsocks.addProfile(profile)
+    suspend fun setSsProfile(profile: ShadowsocksProfile) = shadowsocks.addProfile(profile)
+    suspend fun deleteSsProfile(id: String) = shadowsocks.deleteProfile(id)
+    suspend fun renameSsProfile(id: String, newName: String) = shadowsocks.renameProfile(id, newName)
+
+    val hasRatedApp: Flow<Boolean> get() = vpnSecurity.hasRatedApp
+    suspend fun setHasRatedApp(rated: Boolean) = vpnSecurity.setHasRatedApp(rated)
+
+    val ratePromptLastDismissed: Flow<Long> get() = vpnSecurity.ratePromptLastDismissed
+    suspend fun setRatePromptLastDismissed(timestamp: Long) = vpnSecurity.setRatePromptLastDismissed(timestamp)
+
+    suspend fun resetSettings() {
+        dataStore.edit { prefs ->
+            DnsPreferences.reset(prefs)
+            AppearancePreferences.reset(prefs)
+            FilterPreferences.reset(prefs)
+            WireGuardPreferences.reset(prefs)
+            VpnSecurityPreferences.reset(prefs)
         }
-    }
-
-    suspend fun getRoutingModeSnapshot(): String {
-        return routingMode.first()
-    }
-
-    /**
-     * Returns the active profile's serialized config JSON, or null if no
-     * profile is active. Used by the VPN service to feed the Go engine.
-     */
-    suspend fun getWgConfigJsonSnapshot(): String? {
-        val active = getActiveWgProfileSnapshot() ?: return null
-        return active.config.toJson()
-    }
-
-    suspend fun getWgProfilesSnapshot(): List<WireGuardProfile> = wgProfiles.first()
-
-    suspend fun getActiveWgProfileSnapshot(): WireGuardProfile? {
-        val profiles = getWgProfilesSnapshot()
-        if (profiles.isEmpty()) return null
-        val activeId = wgActiveProfileId.first()
-        return profiles.firstOrNull { it.id == activeId } ?: profiles.first()
-    }
-
-    suspend fun addOrUpdateWgProfile(profile: WireGuardProfile, makeActive: Boolean = false) {
-        context.dataStore.edit { prefs ->
-            val current = readProfilesFromPrefs(prefs).toMutableList()
-            val idx = current.indexOfFirst { it.id == profile.id }
-            if (idx >= 0) current[idx] = profile else current.add(profile)
-            prefs[KEY_WG_PROFILES_JSON] = WireGuardProfileList(current).toJson()
-            if (makeActive) prefs[KEY_WG_ACTIVE_PROFILE_ID] = profile.id
-            // Once profiles exist, the legacy single-config key is dead weight.
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    suspend fun removeWgProfile(id: String) {
-        context.dataStore.edit { prefs ->
-            val current = readProfilesFromPrefs(prefs).filterNot { it.id == id }
-            prefs[KEY_WG_PROFILES_JSON] = WireGuardProfileList(current).toJson()
-            if (prefs[KEY_WG_ACTIVE_PROFILE_ID] == id) {
-                val newActive = current.firstOrNull()?.id
-                if (newActive != null) {
-                    prefs[KEY_WG_ACTIVE_PROFILE_ID] = newActive
-                } else {
-                    prefs.remove(KEY_WG_ACTIVE_PROFILE_ID)
-                }
-            }
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    suspend fun setActiveWgProfile(id: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_WG_ACTIVE_PROFILE_ID] = id
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    suspend fun renameWgProfile(id: String, name: String) {
-        context.dataStore.edit { prefs ->
-            val current = readProfilesFromPrefs(prefs).map {
-                if (it.id == id) it.copy(name = name) else it
-            }
-            prefs[KEY_WG_PROFILES_JSON] = WireGuardProfileList(current).toJson()
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    suspend fun clearAllWgProfiles() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(KEY_WG_PROFILES_JSON)
-            prefs.remove(KEY_WG_ACTIVE_PROFILE_ID)
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    /**
-     * One-shot migration from the v6.3.0 single-config schema to the multi-
-     * profile schema. Idempotent: a no-op once profiles are persisted.
-     */
-    suspend fun migrateLegacyWgConfigIfNeeded() {
-        context.dataStore.edit { prefs ->
-            if (prefs[KEY_WG_PROFILES_JSON] != null) {
-                // Already migrated; drop the legacy key for tidiness.
-                prefs.remove(KEY_WG_CONFIG_JSON)
-                return@edit
-            }
-            val legacyJson = prefs[KEY_WG_CONFIG_JSON] ?: return@edit
-            val cfg = try {
-                WireGuardConfig.fromJson(legacyJson)
-            } catch (_: Exception) {
-                prefs.remove(KEY_WG_CONFIG_JSON)
-                return@edit
-            }
-            val profile = WireGuardProfile(LEGACY_PROFILE_ID, "Default", cfg)
-            prefs[KEY_WG_PROFILES_JSON] = WireGuardProfileList(listOf(profile)).toJson()
-            prefs[KEY_WG_ACTIVE_PROFILE_ID] = profile.id
-            prefs.remove(KEY_WG_CONFIG_JSON)
-        }
-    }
-
-    // ── HTTPS Filtering ──────────────────────────────────────────────────
-
-    suspend fun setHttpsFilteringEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_HTTPS_FILTERING_ENABLED] = enabled
-        }
-    }
-
-    suspend fun getHttpsFilteringEnabledSnapshot(): Boolean {
-        return context.dataStore.data.first()[KEY_HTTPS_FILTERING_ENABLED] ?: false
-    }
-
-    // HTTP/3 (QUIC) filtering. Default OFF: QUIC is relayed so pages load
-    // fully/smoothly (DNS ad-blocking still applies). ON: browser QUIC is
-    // dropped to force filterable TCP TLS — more in-page filtering but some
-    // sites may load partially.
-    val filterHttp3: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_FILTER_HTTP3] ?: false
-    }
-
-    suspend fun setFilterHttp3(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_FILTER_HTTP3] = enabled
-        }
-    }
-
-    suspend fun getFilterHttp3Snapshot(): Boolean {
-        return context.dataStore.data.first()[KEY_FILTER_HTTP3] ?: false
-    }
-
-    suspend fun setSelectedBrowsers(packages: Set<String>) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_SELECTED_BROWSERS] = packages
-        }
-    }
-
-    fun getSelectedBrowsersSnapshot(): Set<String> {
-        // Read synchronously for init — non-suspend for simplicity
-        return try {
-            kotlinx.coroutines.runBlocking {
-                context.dataStore.data.first()[KEY_SELECTED_BROWSERS] ?: emptySet()
-            }
-        } catch (_: Exception) {
-            emptySet()
-        }
-    }
-
-    suspend fun setCrashReportingEnabled(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_CRASH_REPORTING_ENABLED] = enabled
-        }
-    }
-
-    suspend fun setHideFromRecents(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_HIDE_FROM_RECENTS] = enabled
-        }
-    }
-
-    suspend fun setExcludeLan(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_EXCLUDE_LAN] = enabled
-        }
-    }
-
-    suspend fun setSplitDnsZones(zones: String) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_SPLIT_DNS_ZONES] = zones
-        }
+        directBootPrefs.autoReconnect = true
+        directBootPrefs.routingMode = ROUTING_MODE_DIRECT
     }
 }

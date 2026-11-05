@@ -9,7 +9,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["timestamp"]),
         Index(value = ["isBlocked", "domain"]),
-        Index(value = ["appName"])
+        Index(value = ["appName"]),
+        Index(value = ["countryCode"])
     ]
 )
 data class DnsLogEntry(
@@ -23,5 +24,7 @@ data class DnsLogEntry(
     val appName: String = "",
     val packageName: String = "",
     val resolvedIp: String = "",
-    val blockedBy: String = ""
+    val blockedBy: String = "",
+    val countryCode: String = ""
 )
+

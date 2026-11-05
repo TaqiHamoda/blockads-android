@@ -69,7 +69,6 @@ import app.pwhs.blockads.ui.onboarding.component.CrashReportingStep
 import app.pwhs.blockads.ui.onboarding.component.DnsServerStep
 import app.pwhs.blockads.ui.onboarding.component.OnboardingPageContent
 import app.pwhs.blockads.ui.onboarding.component.PermissionStep
-import app.pwhs.blockads.ui.onboarding.component.ProtectionLevelStep
 import app.pwhs.blockads.ui.onboarding.data.OnboardingPage
 import app.pwhs.blockads.ui.theme.AccentBlue
 import app.pwhs.blockads.utils.AppConstants.TOTAL_PAGES
@@ -86,7 +85,6 @@ fun OnboardingScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val selectedProtectionLevel by viewModel.selectedProtectionLevel.collectAsStateWithLifecycle()
     val selectedDnsProvider by viewModel.selectedDnsProvider.collectAsStateWithLifecycle()
 
     val pagerState = rememberPagerState(pageCount = { TOTAL_PAGES })
@@ -193,18 +191,13 @@ fun OnboardingScreen(
                             description = stringResource(R.string.onboarding_desc_1)
                         )
                     )
-                    // Step 2: Protection level
-                    1 -> ProtectionLevelStep(
-                        selectedLevel = selectedProtectionLevel,
-                        onLevelSelect = { viewModel.selectProtectionLevel(it) }
-                    )
-                    // Step 3: DNS server
-                    2 -> DnsServerStep(
+                    // Step 2: DNS server
+                    1 -> DnsServerStep(
                         selectedProvider = selectedDnsProvider,
                         onProviderSelect = { viewModel.selectDnsProvider(it) }
                     )
-                    // Step 4: VPN permission
-                    3 -> PermissionStep(
+                    // Step 3: VPN permission
+                    2 -> PermissionStep(
                         icon = Icons.Filled.VpnKey,
                         title = stringResource(R.string.onboarding_vpn_title),
                         description = stringResource(R.string.onboarding_vpn_desc),
@@ -220,8 +213,8 @@ fun OnboardingScreen(
                             }
                         }
                     )
-                    // Step 5: Notification permission (Android 13+)
-                    4 -> PermissionStep(
+                    // Step 4: Notification permission (Android 13+)
+                    3 -> PermissionStep(
                         icon = Icons.Filled.Notifications,
                         title = stringResource(R.string.onboarding_notification_title),
                         description = stringResource(R.string.onboarding_notification_desc),
@@ -239,8 +232,8 @@ fun OnboardingScreen(
                             }
                         }
                     )
-                    // Step 6: Battery optimization
-                    5 -> PermissionStep(
+                    // Step 5: Battery optimization
+                    4 -> PermissionStep(
                         icon = Icons.Filled.BatteryChargingFull,
                         title = stringResource(R.string.onboarding_battery_title),
                         description = stringResource(R.string.onboarding_battery_desc),
@@ -272,17 +265,17 @@ fun OnboardingScreen(
                             }
                         }
                     )
-                    // Step 7: Crash Reporting Options
-                    6 -> CrashReportingStep(
+                    // Step 6: Crash Reporting Options
+                    5 -> CrashReportingStep(
                         onOptInChoiceMade = { isOptIn ->
                             viewModel.setCrashReportingEnabled(isOptIn)
                             scope.launch {
-                                pagerState.animateScrollToPage(7)
+                                pagerState.animateScrollToPage(6)
                             }
                         }
                     )
                     // Completion
-                    7 -> CompletionStep()
+                    6 -> CompletionStep()
                 }
             }
 

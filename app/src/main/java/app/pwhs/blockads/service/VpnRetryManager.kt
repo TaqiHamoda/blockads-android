@@ -70,6 +70,8 @@ class VpnRetryManager(
         try {
             delay(delayMs)
             return true
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.e("Retry wait interrupted: $e")
             return false

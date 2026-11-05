@@ -1,25 +1,52 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
-import java.util.Properties
+// Copy fdroid release APKs to build/outputs/apk/release/ with legacy un-flavored
+// filenames (blockadstv-*-release*.apk) so F-Droid AutoUpdateMode and GitHub Release
+// deploy.yml continue to work without requiring changes in fdroiddata.
+val copyFdroidReleaseApks = tasks.register<Copy>("copyFdroidReleaseApks") {
+    from(layout.buildDirectory.dir("outputs/apk/fdroid/release")) {
+        include("*.apk")
+        rename { it.replace("blockadstv-fdroid-", "blockadstv-") }
+    }
+    into(layout.buildDirectory.dir("outputs/apk/release"))
+}
+
+tasks.matching { it.name == "assembleFdroidRelease" || it.name == "packageFdroidRelease" }.configureEach {
+    finalizedBy(copyFdroidReleaseApks)
+}
 
 android {
     namespace = "app.pwhs.blockadstv"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "app.pwhs.blockadstv"
         minSdk = 24
         targetSdk = 36
-        versionCode = 50
-        versionName = "6.5.1"
+        versionCode = 58
+        versionName = "7.1.1"
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("fdroid") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "IS_STORE", "false")
+        }
+        create("store") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "IS_STORE", "true")
+        }
     }
 
     // Load signing config from key.properties (CI/CD)
@@ -70,9 +97,37 @@ kotlin {
         freeCompilerArgs = listOf("-XXLanguage:+PropertyParamAnnotationDefaultTargetMode")
     }
 }
+
+// Where the Go tunnel comes from. See the root build file and docs/TUNNEL.md.
+//   unset      the published app.pwhs:tunnel release artifact, checksum-verified
+//   local      built from tunnel/ by :buildGoTunnel
+//   prebuilt   an aar already sitting at build/tunnel/tunnel.aar, used as-is
+val tunnelSource = providers.gradleProperty("tunnel.source").orNull
+val tunnelFromFile = tunnelSource == "local" || tunnelSource == "prebuilt"
+
+when (tunnelSource) {
+    "local" -> tasks.named("preBuild") { dependsOn(":buildGoTunnel") }
+    // "prebuilt" means the caller already produced the aar, so there is nothing
+    // to run first; building it here would just repeat their work.
+    "prebuilt" -> Unit
+    else -> tasks.named("preBuild") { dependsOn(":verifyTunnelAar") }
+}
+
 dependencies {
     // Go tunnel engine
-    implementation(files("libs/tunnel.aar"))
+    if (tunnelFromFile) {
+        implementation(files(rootProject.layout.buildDirectory.file("tunnel/tunnel.aar")))
+    } else {
+        implementation(libs.tunnel) {
+            // No Ivy/Maven metadata on a release asset, so name the artifact
+            // explicitly; otherwise Gradle looks for tunnel-<version>.jar.
+            artifact {
+                name = "tunnel"
+                type = "aar"
+                extension = "aar"
+            }
+        }
+    }
 
     // Core Android
     implementation(libs.androidx.core.ktx)
@@ -87,6 +142,7 @@ dependencies {
 
     // TV Material
     implementation(libs.androidx.tv.material)
+    implementation(libs.accompanist.drawablepainter)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -114,6 +170,13 @@ dependencies {
 
     // Logging
     implementation(libs.timber)
+
+    // Kotlin Serialization
+    implementation(libs.kotlinx.serialization.json)
+
+    // libsu — root shell access for iptables mode
+    implementation(libs.core)
+    implementation(libs.service)
 
     // Testing
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -36,7 +36,7 @@ class WidgetToggleReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     Timber.e(e, "Error toggling VPN from widget receiver")
                 } finally {
-                    pendingResult.finish()
+                    pendingResult?.finish()
                 }
             }
         }
@@ -71,16 +71,6 @@ class WidgetToggleReceiver : BroadcastReceiver() {
             val appPrefs = AppPreferences(context)
             val routingMode = appPrefs.routingMode.first()
             val isRootMode = routingMode == AppPreferences.ROUTING_MODE_ROOT
-
-            if (!isRootMode && VpnUtils.isOtherVpnActive(context)) {
-                Timber.w("Another VPN is active, dropping widget connection request")
-                val appIntent = Intent(context, MainActivity::class.java).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    putExtra(MainActivity.EXTRA_SHOW_VPN_CONFLICT_DIALOG, true)
-                }
-                context.startActivity(appIntent)
-                return
-            }
 
             // Start logic: determine the service class and action dynamically based on routing mode
             val targetClass = if (isRootMode) RootProxyService::class.java else AdBlockVpnService::class.java

@@ -16,8 +16,17 @@ interface WhitelistDomainDao {
     @Query("SELECT domain FROM whitelist_domains")
     suspend fun getAllDomains(): List<String>
 
+    @Query("SELECT domain FROM whitelist_domains WHERE isEnabled = 1")
+    suspend fun getEnabledDomains(): List<String>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(domain: WhitelistDomain)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(domains: List<WhitelistDomain>)
+
+    @androidx.room.Update
+    suspend fun update(domain: WhitelistDomain)
 
     @Delete
     suspend fun delete(domain: WhitelistDomain)

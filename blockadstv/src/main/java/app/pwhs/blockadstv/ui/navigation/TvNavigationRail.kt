@@ -1,6 +1,11 @@
 package app.pwhs.blockadstv.ui.navigation
 
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,19 +14,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.Rule
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,33 +31,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import app.pwhs.blockadstv.ui.theme.NavRailBackground
-import app.pwhs.blockadstv.ui.theme.NavRailSelected
-import app.pwhs.blockadstv.ui.theme.NeonGreen
-import app.pwhs.blockadstv.ui.theme.TextSecondary
+import app.pwhs.blockadstv.R
 
 enum class TvScreen(
-    val label: String,
-    val icon: ImageVector,
+    @StringRes val labelRes: Int,
+    @DrawableRes val iconRes: Int,
 ) {
-    Home("Home", Icons.Default.Home),
-    Filters("Filters", Icons.Default.FilterList),
-    Rules("Rules", Icons.AutoMirrored.Default.Rule),
-    Apps("Apps", Icons.Default.Apps),
-    Logs("Logs", Icons.AutoMirrored.Default.List),
-    Dns("DNS", Icons.Default.Dns),
-    Settings("Settings", Icons.Default.Settings),
+    Home(R.string.nav_home, R.drawable.ic_home),
+    Filters(R.string.nav_filters, R.drawable.ic_shield),
+    Rules(R.string.nav_rules, R.drawable.ic_crown),
+    Apps(R.string.nav_apps, R.drawable.ic_settings_whitelist_apps),
+    Logs(R.string.nav_logs, R.drawable.ic_history),
+    Dns(R.string.nav_dns, R.drawable.ic_dns),
+    Proxy(R.string.nav_proxy, R.drawable.ic_nav_proxy),
+    Settings(R.string.nav_settings, R.drawable.ic_setting),
 }
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -74,24 +70,33 @@ fun TvNavigationDrawer(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(80.dp)
-                .background(NavRailBackground)
-                .padding(vertical = 24.dp),
+                .width(96.dp)
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top,
         ) {
-            // App icon / branding
-            Text(
-                text = "BA",
-                style = MaterialTheme.typography.titleLarge,
-                color = NeonGreen,
-                modifier = Modifier.padding(bottom = 24.dp),
-            )
+            // App icon / branding with branded circular container
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = "BlockAds Logo",
+                    modifier = Modifier.size(26.dp),
+                    colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.primary),
+                )
+            }
+            Spacer(modifier = Modifier.height(14.dp))
 
             TvScreen.entries.forEach { screen ->
                 NavRailItem(
-                    icon = screen.icon,
-                    label = screen.label,
+                    iconRes = screen.iconRes,
+                    label = stringResource(screen.labelRes),
                     selected = selectedScreen == screen,
                     onClick = { onScreenSelected(screen) },
                 )
@@ -113,7 +118,7 @@ fun TvNavigationDrawer(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun NavRailItem(
-    icon: ImageVector,
+    @DrawableRes iconRes: Int,
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -121,50 +126,51 @@ private fun NavRailItem(
     var isFocused by remember { mutableStateOf(false) }
 
     val backgroundColor = when {
-        selected -> NavRailSelected
-        isFocused -> NavRailSelected.copy(alpha = 0.5f)
+        isFocused -> MaterialTheme.colorScheme.surfaceVariant
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
         else -> Color.Transparent
     }
-    val iconTint = when {
-        selected -> NeonGreen
-        isFocused -> NeonGreen.copy(alpha = 0.8f)
-        else -> TextSecondary
+    val borderColor = when {
+        isFocused -> MaterialTheme.colorScheme.primary
+        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+        else -> Color.Transparent
     }
-    val labelColor = when {
-        selected -> NeonGreen
-        isFocused -> NeonGreen.copy(alpha = 0.8f)
-        else -> TextSecondary
+    val contentColor = when {
+        selected || isFocused -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Column(
         modifier = Modifier
-            .width(64.dp)
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(backgroundColor)
+            .border(
+                width = if (isFocused) 2.dp else if (selected) 1.dp else 0.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(12.dp),
+            )
             .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyUp && (event.key == Key.Enter || event.key == Key.DirectionCenter)) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
-            .padding(vertical = 8.dp, horizontal = 8.dp),
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            imageVector = icon,
+            painter = painterResource(id = iconRes),
             contentDescription = label,
-            tint = iconTint,
+            tint = contentColor,
             modifier = Modifier.size(22.dp),
         )
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = labelColor,
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
         )
     }
 }

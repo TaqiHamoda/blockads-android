@@ -1,9 +1,11 @@
 package tunnel
 
 import (
+	"encoding/binary"
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -132,12 +134,27 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 	e.protectFn = protectFn
 	e.resolver = NewResolver(protectFn)
 	e.resolver.Configure(ParseProtocol(e.protocol), e.primaryDNS, e.fallbackDNS, e.dohURL)
+	e.resolver.SetODoHRelay(e.odohRelayURL)
 
 	certMgr := e.stackCertMgr
 	filter := e.stackMitmFilter
 	uidr := e.uidResolver
 	done := make(chan struct{})
 	e.fullTunnelDone = done
+
+	// Ensure active proxy client uses the live protectFn
+	if pc := e.proxyClient.Load(); pc != nil && *pc != nil {
+		(*pc).SetProtectFn(protectFn)
+		logf("StartFull: Proxy outbound (%s) active via %s", (*pc).Protocol(), (*pc).ServerAddress())
+	}
+	if client := e.ssClient.Load(); client != nil && client.Config() != nil {
+		client.SetProtectFn(protectFn)
+		logf("StartFull: Shadowsocks outbound active via %s", client.ServerAddress())
+	}
+	if mgr := e.tsManager.Load(); mgr != nil {
+		mgr.SetProtectFn(protectFn)
+		_ = mgr.StartSession("blockads-android")
+	}
 	e.mu.Unlock()
 
 	fail := func(format string, args ...interface{}) {
@@ -161,6 +178,9 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 		fail("StartFull: dup TUN fd %d failed: %v", fd, err)
 		return
 	}
+	if err := syscall.SetNonblock(dupFd, true); err != nil {
+		logf("StartFull: set nonblock on dup TUN fd %d: %v", dupFd, err)
+	}
 	tunFile := os.NewFile(uintptr(dupFd), "tun")
 	if tunFile == nil {
 		fail("StartFull: open TUN fd %d failed", dupFd)
@@ -171,13 +191,20 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 	// no packetPipe, no outbound-writer goroutine.
 	stack := NewTcpIpStack()
 	stack.SetUIDResolver(uidr)
+	var tcpHandler TcpFlowHandler
 	if mitmActive {
-		// HTTPS filtering on → MITM browser TCP, adblock, cosmetic inject.
-		stack.SetTcpHandler(newMitmTcpHandler(certMgr, filter, e, uidr, protectFn))
+		tcpHandler = newMitmTcpHandler(certMgr, filter, e, uidr, protectFn)
 	} else {
-		// Full-tunnel without HTTPS → protected passthrough (DNS-level filter).
-		stack.SetTcpHandler(newFullPassthroughTcpHandler(e, uidr, protectFn))
+		tcpHandler = newFullPassthroughTcpHandler(e, uidr, protectFn)
 	}
+	stack.SetTcpHandler(func(conn adapter.TCPConn) {
+		flow := tcpFlowID(conn)
+		if flow.serverPort == 53 {
+			handleDNSOverTCP(conn, e)
+			return
+		}
+		tcpHandler(conn)
+	})
 	stack.SetUdpHandler(newFullTunnelUdpHandler(e, filter, uidr, protectFn))
 	logf("StartFull: mitm=%t", mitmActive)
 
@@ -224,12 +251,29 @@ func newFullTunnelUdpHandler(engine *Engine, filter *MitmFilter, uidr UIDResolve
 			handleDNSOverUDP(conn, engine)
 			return
 		}
+		// Gate -1.6: Ruleset IP rules (e.g. IP-CIDR, REJECT)
+		if engine.IsDomainBlocked(flow.serverIP.String()) {
+			_ = conn.Close()
+			return
+		}
+		// Gate -1.7: WebRTC STUN leak protection (ports 3478, 5349, 19302-19309)
+		if engine.blockWebRTC.Load() && isStunPort(flow.serverPort) {
+			_ = conn.Close()
+			return
+		}
 		engine.logConnection(flow, ProtocolUDP)
+
+		// When Proxy (Shadowsocks, Trojan, VLESS) is active, drop QUIC (UDP 443) so browsers fall back to TCP through the proxy.
+		if (engine.proxyClient.Load() != nil || engine.ssClient.Load() != nil) && flow.serverPort == 443 {
+			_ = conn.Close()
+			return
+		}
+
 		// Browser QUIC (UDP 443): drop to force TCP TLS for MITM — ONLY
-		// when HTTP/3 filtering is enabled from the UI. Default off →
-		// relay QUIC so pages load fully. DNS-level blocking still applies
-		// either way.
-		if engine.quicDrop.Load() && flow.serverPort == 443 && filter != nil && filter.HasAllowedUIDs() {
+		// when MITM is active and HTTP/3 filtering is enabled from the UI.
+		// Default off → relay QUIC so pages load fully. DNS-level blocking
+		// still applies either way.
+		if engine.quicDrop.Load() && filter != nil && filter.HasAllowedUIDs() && flow.serverPort == 443 {
 			uid := resolveFlowUID(uidr, ProtocolUDP, flow)
 			if uid != UIDUnknown && filter.IsUIDAllowed(uid) {
 				_ = conn.Close()
@@ -255,9 +299,60 @@ func newFullPassthroughTcpHandler(engine *Engine, uidr UIDResolver, protectFn fu
 	return func(conn adapter.TCPConn) {
 		defer conn.Close()
 		flow := tcpFlowID(conn)
+		// Gate -1: DoT (port 853) - close to force fallback to port 53 DNS
+		if flow.serverPort == 853 {
+			return
+		}
+		if isVirtualDnsIP(flow.serverIP) {
+			return
+		}
+		// Gate -1.5: Hardcoded DoH Direct-IP (port 443) - close to force fallback if DoH/DoT blocking is enabled
+		if engine.IsDoHBlockingEnabled() && flow.serverPort == 443 && isKnownPublicDoHIP(flow.serverIP) {
+			return
+		}
+		// Gate -1.6: Ruleset IP rules (e.g. IP-CIDR, REJECT)
+		if engine.IsDomainBlocked(flow.serverIP.String()) {
+			return
+		}
+		// Gate -1.7: WebRTC STUN/TURN over TCP (ports 3478, 5349)
+		if engine.blockWebRTC.Load() && (flow.serverPort == 3478 || flow.serverPort == 5349) {
+			return
+		}
 		engine.logConnection(flow, ProtocolTCP)
 		relayDirectFromFlow(conn, flow, engine, protectFn)
 	}
+}
+
+// isStunPort returns true if the port is commonly used for WebRTC STUN discovery
+// (RFC 5389 / Google STUN infrastructure).
+func isStunPort(port int) bool {
+	return port == 3478 || port == 5349 || (port >= 19302 && port <= 19309)
+}
+
+func relayDirectFromFlow(clientConn net.Conn, flow flowID, engine *Engine, protectFn func(fd int) bool) {
+	if remote, used, err := engine.DialProxy(flow.serverIP, flow.serverPort); used {
+		if err != nil {
+			logf("[FullTunnel] proxy dial %s:%d failed: %v", flow.serverIP, flow.serverPort, err)
+			return
+		}
+		defer remote.Close()
+		bidiCopyFlow(clientConn, remote)
+		return
+	}
+
+	dialer := &net.Dialer{
+		Timeout: flowDialTimeout,
+		Control: protectedControl(protectFn),
+	}
+	dst := net.JoinHostPort(flow.serverIP.String(), strconv.Itoa(flow.serverPort))
+	remote, err := dialer.Dial("tcp", dst)
+	if err != nil {
+		logf("[FullTunnel] upstream dial %s failed: %v", dst, err)
+		return
+	}
+	defer remote.Close()
+
+	bidiCopyFlow(clientConn, remote)
 }
 
 // SetFilterHttp3 toggles HTTP/3 (QUIC) filtering. When true, browser QUIC
@@ -320,9 +415,80 @@ func (w *udpDNSResponseWriter) WriteMsg(m *dns.Msg) error {
 
 func (w *udpDNSResponseWriter) Write(b []byte) (int, error) { return w.conn.Write(b) }
 
-// Close is a no-op: the owning handleDNSOverUDP loop owns the conn and
-// closes it when the flow ends.
-func (w *udpDNSResponseWriter) Close() error   { return nil }
-func (w *udpDNSResponseWriter) TsigStatus() error { return nil }
+func (w *udpDNSResponseWriter) Close() error        { return nil }
+func (w *udpDNSResponseWriter) TsigStatus() error    { return nil }
 func (w *udpDNSResponseWriter) TsigTimersOnly(bool) {}
 func (w *udpDNSResponseWriter) Hijack()             {}
+
+// isVirtualDnsIP checks whether the destination IP matches any of our virtual DNS server addresses.
+func isVirtualDnsIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+	s := ip.String()
+	return s == "100.64.100.1" || s == "fd00::1" || s == "192.0.2.2" || s == "2001:db8:1111::2"
+}
+
+// handleDNSOverTCP reads DNS query frames off a stack TCP flow (RFC 7766), runs
+// each through engine.ServeDNS, and writes the framed response back.
+func handleDNSOverTCP(conn adapter.TCPConn, engine *Engine) {
+	defer conn.Close()
+	appName := engine.appNameForFlow(tcpFlowID(conn), ProtocolTCP)
+	lenBuf := make([]byte, 2)
+	for {
+		_ = conn.SetReadDeadline(time.Now().Add(dnsUDPIdleTimeout))
+		if _, err := io.ReadFull(conn, lenBuf); err != nil {
+			return
+		}
+		msgLen := binary.BigEndian.Uint16(lenBuf)
+		if msgLen == 0 {
+			return
+		}
+		buf := make([]byte, msgLen)
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			return
+		}
+		req := new(dns.Msg)
+		if err := req.Unpack(buf); err != nil {
+			continue
+		}
+		engine.serveDNS(&tcpDNSResponseWriter{conn: conn}, req, appName)
+	}
+}
+
+// tcpDNSResponseWriter adapts a stack TCP flow to dns.ResponseWriter with 2-byte framing.
+type tcpDNSResponseWriter struct {
+	conn adapter.TCPConn
+}
+
+func (w *tcpDNSResponseWriter) LocalAddr() net.Addr  { return w.conn.LocalAddr() }
+func (w *tcpDNSResponseWriter) RemoteAddr() net.Addr { return w.conn.RemoteAddr() }
+
+func (w *tcpDNSResponseWriter) WriteMsg(m *dns.Msg) error {
+	packed, err := m.Pack()
+	if err != nil {
+		return err
+	}
+	lenBuf := make([]byte, 2)
+	binary.BigEndian.PutUint16(lenBuf, uint16(len(packed)))
+	if _, err := w.conn.Write(lenBuf); err != nil {
+		return err
+	}
+	_, err = w.conn.Write(packed)
+	return err
+}
+
+func (w *tcpDNSResponseWriter) Write(b []byte) (int, error) {
+	lenBuf := make([]byte, 2)
+	binary.BigEndian.PutUint16(lenBuf, uint16(len(b)))
+	if _, err := w.conn.Write(lenBuf); err != nil {
+		return 0, err
+	}
+	return w.conn.Write(b)
+}
+
+func (w *tcpDNSResponseWriter) Close() error        { return nil }
+func (w *tcpDNSResponseWriter) TsigStatus() error    { return nil }
+func (w *tcpDNSResponseWriter) TsigTimersOnly(bool) {}
+func (w *tcpDNSResponseWriter) Hijack()             {}
+

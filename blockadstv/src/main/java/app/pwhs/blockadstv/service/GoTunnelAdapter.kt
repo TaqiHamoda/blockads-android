@@ -21,14 +21,24 @@ class GoTunnelAdapter(
     private val dnsLogDao: DnsLogDao,
     private val scope: CoroutineScope,
     private val appNameResolver: AppNameResolver,
+    private val firewallManager: TvFirewallManager,
 ) {
     private val engine = tunnel.Tunnel.newEngine()
 
     @Volatile
     private var isRunning = false
 
-    fun configureDns(protocol: String, primary: String, fallback: String, dohUrl: String) {
+    fun configureDns(
+        protocol: String,
+        primary: String,
+        fallback: String,
+        dohUrl: String,
+        odohRelayUrl: String = "",
+    ) {
         engine.setDNS(protocol, primary, fallback, dohUrl)
+        if (protocol.equals("ODOH", ignoreCase = true) || odohRelayUrl.isNotBlank()) {
+            engine.setODoHRelay(odohRelayUrl)
+        }
     }
 
     fun setBlockResponseType(responseType: String) {
@@ -58,7 +68,15 @@ class GoTunnelAdapter(
     }
 
     private fun setupFirewallChecker() {
-        engine.setFirewallChecker(FirewallChecker { false })
+        engine.setFirewallChecker(FirewallChecker { appName ->
+            try {
+                if (appName.isEmpty()) return@FirewallChecker false
+                firewallManager.shouldBlock(appName)
+            } catch (e: Exception) {
+                Timber.e(e, "Firewall check failed for $appName")
+                false
+            }
+        })
     }
 
     private fun setupLogCallback() {
@@ -99,9 +117,19 @@ class GoTunnelAdapter(
     fun start(
         vpnInterface: ParcelFileDescriptor,
         socketProtector: ((Int) -> Boolean)? = null,
+        proxyProtocol: String = "",
+        proxyConfigJson: String = "",
     ) {
         if (isRunning) return
         isRunning = true
+
+        if (proxyProtocol.isNotEmpty() && proxyConfigJson.isNotEmpty()) {
+            try {
+                engine.setProxyNodeConfig(proxyProtocol, proxyConfigJson)
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to configure proxy node in Go engine")
+            }
+        }
 
         setupAppResolver()
         setupDomainChecker()
@@ -110,13 +138,62 @@ class GoTunnelAdapter(
         updateTries()
 
         val fd = vpnInterface.fd
-        Timber.d("Starting Go tunnel engine with fd=$fd")
+        Timber.d("Starting Go tunnel engine with fd=$fd, hasProxy=${proxyConfigJson.isNotEmpty()}")
 
         val protector = SocketProtector { fd ->
             socketProtector?.invoke(fd.toInt()) ?: false
         }
 
-        engine.start(fd.toLong(), protector, "")
+        if (proxyConfigJson.isNotEmpty()) {
+            engine.startFull(fd.toLong(), protector)
+        } else {
+            engine.start(fd.toLong(), protector, "")
+        }
+    }
+
+    suspend fun startStandalone(port: Int): Boolean {
+        if (isRunning) {
+            stop()
+            kotlinx.coroutines.delay(300)
+        }
+
+        setupAppResolver()
+        setupDomainChecker()
+        setupFirewallChecker()
+        setupLogCallback()
+        updateTries()
+
+        Timber.d("Starting TV Go tunnel engine in STANDALONE mode on port $port")
+        val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                launch {
+                    kotlinx.coroutines.delay(500)
+                    if (!deferred.isCompleted) {
+                        isRunning = true
+                        deferred.complete(true)
+                    }
+                }
+                engine.startStandalone(port.toLong())
+            } catch (e: Exception) {
+                Timber.e(e, "TV Go standalone engine crashed or failed to start")
+                isRunning = false
+                if (!deferred.isCompleted) {
+                    deferred.complete(false)
+                }
+            }
+        }
+
+        return try {
+            kotlinx.coroutines.withTimeout(2000) {
+                deferred.await()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Timeout or error starting TV Go standalone engine")
+            isRunning = false
+            false
+        }
     }
 
     fun stop() {

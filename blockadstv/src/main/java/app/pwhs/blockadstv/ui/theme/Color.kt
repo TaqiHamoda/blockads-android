@@ -24,6 +24,13 @@ val TextPrimary = Color(0xFFF0F6FC)
 val TextSecondary = Color(0xFF8B949E)
 val TextTertiary = Color(0xFF6E7681)
 
+// Light theme palette
+val LightBackground = Color(0xFFF6F8FA)
+val LightSurface = Color(0xFFFFFFFF)
+val LightSurfaceVariant = Color(0xFFEAEFF2)
+val LightTextPrimary = Color(0xFF1F2328)
+val LightTextSecondary = Color(0xFF656D76)
+
 // Navigation rail
 val NavRailBackground = Color(0xFF0D1117)
 val NavRailSelected = Color(0xFF1A2332)

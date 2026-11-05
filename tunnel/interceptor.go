@@ -103,11 +103,25 @@ func (i *DnsInterceptor) Run(tunFile *os.File) {
 				}
 			}
 		} else {
-			// Non-DNS path → route to active outbound adapter
-			// Make a copy because buf will be reused on next iteration
-			pkt := make([]byte, n)
-			copy(pkt, buf[:n])
-			i.router.RoutePacket(pkt, n)
+			// Non-DNS path: inspect for rejected targets (0.0.0.0, DoT, DoH)
+			// before routing to outbound adapter (e.g. WireGuard).
+			isDoH := false
+			if i.engine != nil {
+				isDoH = i.engine.IsDoHBlockingEnabled()
+			}
+			action := classifyNonDNSPacket(buf, n, isDoH)
+			switch action {
+			case packetActionReset:
+				if rst := buildTCPReset(buf, n); rst != nil && tunFile != nil {
+					_, _ = tunFile.Write(rst)
+				}
+			case packetActionDrop:
+				// Silently dropped (e.g. UDP to 0.0.0.0 or QUIC DoH)
+			case packetActionForward:
+				pkt := make([]byte, n)
+				copy(pkt, buf[:n])
+				i.router.RoutePacket(pkt, n)
+			}
 		}
 	}
 

@@ -51,6 +51,7 @@ object ServiceController {
 
     /**
      * Stop whichever service is currently running.
+     * Ignored while Lockdown Mode is active.
      */
     fun requestStop(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -60,12 +61,16 @@ object ServiceController {
                 Timber.w("Stop request ignored: System is in Lockdown Mode.")
                 return@launch
             }
-            if (RootProxyService.isRunning) {
-                RootProxyService.stop(context)
-            }
-            if (AdBlockVpnService.isRunning) {
-                AdBlockVpnService.stop(context)
-            }
+            requestStop(context, AdBlockVpnService.state.value, RootProxyService.state.value)
+        }
+    }
+
+    internal fun requestStop(context: Context, vpnState: VpnState, rootState: VpnState) {
+        if (rootState == VpnState.RUNNING) {
+            RootProxyService.stop(context)
+        }
+        if (vpnState == VpnState.RUNNING) {
+            AdBlockVpnService.stop(context)
         }
     }
 }

@@ -4,10 +4,12 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
 import android.system.OsConstants
+import app.pwhs.blockads.R
 import app.pwhs.blockads.data.dao.DnsLogDao
 import app.pwhs.blockads.data.entities.DnsLogEntry
 import app.pwhs.blockads.data.repository.FilterListRepository
 import app.pwhs.blockads.utils.AppNameResolver
+import app.pwhs.blockads.utils.BlocklistInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -25,14 +27,6 @@ import java.net.InetSocketAddress
 
 /**
  * Bridge between Android VpnService and the Go DNS tunnel engine.
- *
- * Responsibilities:
- * - Pass TUN file descriptor to Go engine
- * - Implement [DomainChecker] so Go calls Kotlin's mmap'd Trie for blocking decisions
- * - Implement [FirewallChecker] so Go calls Kotlin's FirewallManager for per-app blocking
- * - Implement [SocketProtector] so Go can protect sockets from VPN routing loop
- * - Receive DNS log events from Go and write to Room DB
- * - Pass WireGuard config JSON to Go engine on startup (unified pipeline)
  */
 class GoTunnelAdapter(
     private val context: Context,
@@ -40,17 +34,19 @@ class GoTunnelAdapter(
     private val dnsLogDao: DnsLogDao,
     private val scope: CoroutineScope,
     private val appNameResolver: AppNameResolver,
-    /**
-     * Returns the current [FirewallManager] if firewall is enabled, or null if disabled.
-     * This is a lambda so it always reads the latest value from [AdBlockVpnService].
-     */
     private val firewallManagerProvider: () -> FirewallManager?,
-    /**
-     * Returns whether DNS logs should be recorded to the database.
-     */
     private val recordLogProvider: () -> Boolean,
 ) {
     private val engine = tunnel.Tunnel.newEngine()
+
+    init {
+        TunnelRuleLoader.loadGeoIPDatabase(context, engine)
+    }
+
+    /**
+     * Hot-reload the GeoIP database into the Go engine when a new version is downloaded.
+     */
+    fun reloadGeoIp() = TunnelRuleLoader.loadGeoIPDatabase(context, engine)
 
     @Volatile
     private var isRunning = false
@@ -63,86 +59,38 @@ class GoTunnelAdapter(
         primary: String,
         fallback: String,
         dohUrl: String,
+        odohRelayUrl: String = "",
     ) {
         engine.setDNS(protocol, primary, fallback, dohUrl)
+        if (protocol.equals("ODOH", ignoreCase = true) || odohRelayUrl.isNotEmpty()) {
+            engine.setODoHRelay(odohRelayUrl)
+        }
     }
 
-    /**
-     * Configure the block response type.
-     * @param responseType "CUSTOM_IP", "NXDOMAIN", or "REFUSED"
-     */
-    fun setBlockResponseType(responseType: String) {
-        engine.setBlockResponseType(responseType)
-    }
+    fun setBlockResponseType(responseType: String) = engine.setBlockResponseType(responseType)
 
-    /**
-     * Configure split-DNS zones for WireGuard internal domains.
-     * @param zones Comma-separated zone suffixes (e.g., "internal,local,lan")
-     */
-    fun setSplitDNSZones(zones: String) {
-        engine.setSplitDNSZones(zones)
-    }
+    fun setSplitDNSZones(zones: String) = engine.setSplitDNSZones(zones)
 
-    /**
-     * Configure SafeSearch and YouTube restricted mode.
-     */
     fun configureSafeSearch(safeSearchEnabled: Boolean, youtubeRestricted: Boolean) {
         engine.setSafeSearch(safeSearchEnabled)
         engine.setYouTubeRestricted(youtubeRestricted)
     }
 
-    /**
-     * Toggle the experimental userspace TCP/IP stack path (HTTPS
-     * filtering refactor, Phases C+). When enabled, non-DNS packets
-     * are diverted from the legacy Router into a gVisor-backed
-     * userspace stack that terminates each TCP/UDP flow with per-app
-     * UID visibility.
-     *
-     * Must be called BEFORE [start]; runtime toggling is not supported
-     * in Phase C. Default false (legacy path).
-     */
-    fun setUseTcpStack(enabled: Boolean) {
-        engine.setUseTcpStack(enabled)
-    }
+    fun setPreferredIPType(type: String) = engine.setPreferredIPType(type)
 
-    /**
-     * Set up the domain checker (uses Kotlin's FilterListRepository).
-     */
+    fun setUseTcpStack(enabled: Boolean) = engine.setUseTcpStack(enabled)
+
     private fun setupDomainChecker() {
         engine.setDomainChecker(object : DomainChecker {
-            override fun isBlocked(domain: String): Boolean {
-                return filterRepo.isBlocked(domain)
-            }
-
-            override fun getBlockReason(domain: String): String {
-                return filterRepo.getBlockReason(domain)
-            }
-
-            override fun hasCustomRule(domain: String): Long {
-                return filterRepo.hasCustomRule(domain)
-            }
+            override fun isBlocked(domain: String): Boolean = filterRepo.isBlocked(domain)
+            override fun getBlockReason(domain: String): String = filterRepo.getBlockReason(domain)
+            override fun hasCustomRule(domain: String): Long = filterRepo.hasCustomRule(domain)
         })
     }
 
-    /**
-     * Set up the UID resolver used by the userspace TCP/IP stack
-     * (HTTPS filtering refactor, Phase B). For each terminated TCP/UDP
-     * flow the stack calls [resolveUID] with the 5-tuple and expects
-     * back the UID of the owning app, so downstream code can scope MITM
-     * decisions per-app.
-     *
-     * Uses the official [ConnectivityManager.getConnectionOwnerUid] API
-     * on Android 10+ (API 29+). On older devices the API is missing
-     * and /proc/net/{tcp,udp} is SELinux-blocked, so we return
-     * UIDUnknown (-1) and the stack treats the flow conservatively.
-     */
     private fun setupUidResolver() {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        if (cm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            // No resolver available — stack will see UIDUnknown for every flow.
-            Timber.d("UID resolver unavailable (API<29 or no ConnectivityManager)")
-            return
-        }
+        if (cm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         engine.setUIDResolver(UIDResolver { protocol, localIP, localPort, remoteIP, remotePort ->
             try {
                 val proto = when (protocol.toInt()) {
@@ -154,20 +102,11 @@ class GoTunnelAdapter(
                 val remote = InetSocketAddress(InetAddress.getByName(remoteIP), remotePort.toInt())
                 cm.getConnectionOwnerUid(proto, local, remote).toLong()
             } catch (e: Exception) {
-                // Race against socket teardown or invalid input — return
-                // UIDUnknown so the stack can fall back gracefully.
                 -1L
             }
         })
     }
 
-    /**
-     * UID→package resolver for full-tunnel per-app attribution + connection
-     * logging. Takes only an int (no byte[]), so it's safe from Go's
-     * concurrent flow hot path (unlike [AppResolver], whose byte[] args
-     * panic under cgocheck). Returns the package name; the log callback maps
-     * it to a friendly label.
-     */
     private fun setupAppUidResolver() {
         engine.setAppUidResolver(tunnel.AppUidResolver { uid ->
             try {
@@ -235,39 +174,93 @@ class GoTunnelAdapter(
         engine.setConnLogEnabled(enabled)
     }
 
+    fun setBlockDohBypass(enabled: Boolean) {
+        try {
+            if (enabled) {
+                val loaded = BlocklistInfo.fromAsset(context, "blocklist_doh.txt")?.use { info ->
+                    engine.setDoHBlocklistFromFd(info.fd, info.startOffset, info.length)
+                    true
+                } ?: false
+                if (!loaded) {
+                    val list = context.assets.open("blocklist_doh.txt").bufferedReader().use { it.readText() }
+                    engine.setDoHBlocklist(list)
+                }
+            } else {
+                engine.setDoHBlocklist("")
+            }
+            Timber.d("DoH blocklist updated in Go engine (enabled=$enabled)")
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to update DoH blocklist")
+        }
+    }
+
+    fun setBlockWebRtc(enabled: Boolean) {
+        engine.setBlockWebRTC(enabled)
+    }
+
     /**
      * Set the DNS log callback.
      */
     private fun setupLogCallback() {
         engine.setConnLogEnabled(recordLogProvider())
+        val ownPackage = context.packageName
+        val ownAppName = runCatching {
+            val pm = context.packageManager
+            pm.getApplicationLabel(context.applicationInfo).toString()
+        }.getOrDefault("BlockAds")
+
         engine.setLogCallback { domain, blocked, queryType, responseTimeMs, packageNameOrAppName, resolvedIP, blockedBy ->
             if (!recordLogProvider()) return@setLogCallback
+            if (packageNameOrAppName == ownPackage || packageNameOrAppName == ownAppName) return@setLogCallback
 
             scope.launch(Dispatchers.IO) {
                 try {
-                    // Try to resolve the user-friendly App Name string from the package name
-                    val friendlyAppName = if (packageNameOrAppName.isNotEmpty() && packageNameOrAppName.contains(".")) {
-                        try {
-                            val pm = context.packageManager
-                            val info = pm.getApplicationInfo(packageNameOrAppName, 0)
-                            pm.getApplicationLabel(info).toString()
-                        } catch (e: Exception) {
-                            packageNameOrAppName
+                    val (friendlyAppName, cleanPackageName) = when {
+                        packageNameOrAppName == "uid:0" || packageNameOrAppName.equals("unknown", ignoreCase = true) -> {
+                            context.getString(R.string.log_unknown_app) to ""
                         }
-                    } else {
-                        packageNameOrAppName
+                        packageNameOrAppName.startsWith("uid:") -> {
+                            val uid = packageNameOrAppName.removePrefix("uid:").toIntOrNull()
+                            if (uid != null) {
+                                val pkg = appNameResolver.getPackageNameForUid(uid)
+                                val name = appNameResolver.getAppNameForUid(uid)
+                                (if (name.isNotEmpty() && name != "uid:$uid") name else context.getString(R.string.log_unknown_app)) to pkg
+                            } else {
+                                context.getString(R.string.log_unknown_app) to ""
+                            }
+                        }
+                        packageNameOrAppName.contains(".") -> {
+                            val label = runCatching {
+                                val pm = context.packageManager
+                                pm.getApplicationLabel(pm.getApplicationInfo(packageNameOrAppName, 0)).toString()
+                            }.getOrDefault(packageNameOrAppName)
+                            label to packageNameOrAppName
+                        }
+                        else -> {
+                            packageNameOrAppName to ""
+                        }
                     }
 
+                    val resolvedDomain = IpDomainResolver.resolve(domain, resolvedIP)
+                    IpDomainResolver.remember(domain, resolvedIP)
+                    val countryCode = app.pwhs.blockads.data.geoip.GeoIpLookup.getCountryCode(resolvedIP, resolvedDomain)
+                    val isConnection = blockedBy == "connection" || domain.startsWith("TCP ", ignoreCase = true) || domain.startsWith("UDP ", ignoreCase = true)
+                    val effectiveQueryType = if (isConnection) {
+                        if (domain.startsWith("UDP ", ignoreCase = true)) "UDP" else "TCP"
+                    } else {
+                        dnsQueryTypeToString(queryType.toInt())
+                    }
                     val entry = DnsLogEntry(
-                        domain = domain,
+                        domain = resolvedDomain,
                         isBlocked = blocked,
-                        queryType = dnsQueryTypeToString(queryType.toInt()),
+                        queryType = effectiveQueryType,
                         responseTimeMs = responseTimeMs,
                         appName = friendlyAppName,
-                        packageName = packageNameOrAppName,
+                        packageName = cleanPackageName,
                         resolvedIp = resolvedIP,
                         blockedBy = blockedBy,
-                        timestamp = System.currentTimeMillis(),
+                        countryCode = countryCode,
+                        timestamp = System.currentTimeMillis()
                     )
                     dnsLogDao.insert(entry)
                 } catch (e: Exception) {
@@ -277,65 +270,54 @@ class GoTunnelAdapter(
         }
     }
 
-    /**
-     * Start the Go tunnel engine.
-     * This method blocks the calling thread until [stop] is called.
-     *
-     * @param vpnInterface The TUN file descriptor from VpnService
-     * @param wgConfigJson Optional WireGuard config JSON
-     * @param httpsFilteringEnabled True if MITM proxy should be started
-     * @param selectedBrowsers Set of package names allowed for MITM
-     * @param certDir Directory to store the proxy's root CA certificate
-     */
     fun start(
         vpnInterface: android.os.ParcelFileDescriptor, 
         wgConfigJson: String = "",
         httpsFilteringEnabled: Boolean = false,
-        selectedBrowsers: Set<String> = emptySet(),
+        selectedBrowsers: Set<String>? = null,
         certDir: String = "",
         filterHttp3: Boolean = false,
-        socketProtector: ((Int) -> Boolean)? = null
+        blockDohBypass: Boolean = false,
+        blockWebRtc: Boolean = false,
+        socketProtector: ((Int) -> Boolean)? = null,
+        ssConfigJson: String = "",
+        proxyProtocol: String = "",
+        proxyConfigJson: String = ""
     ) {
         if (isRunning) return
         isRunning = true
 
-        // 1. Synchronize the MITM state before starting the tunnel.
-        // HTTPS filtering now runs through the userspace TCP/IP stack
-        // (Phase E): each TCP flow is terminated in Go with real
-        // source-UID visibility, so per-app scoping (MITM only the
-        // selected browsers) actually works on Android 10+. The legacy
-        // VpnService HTTP proxy path is no longer used.
-        if (httpsFilteringEnabled && certDir.isNotEmpty()) {
+        try {
+            if (proxyProtocol.isNotEmpty() && proxyConfigJson.isNotEmpty()) {
+                engine.setProxyNodeConfig(proxyProtocol, proxyConfigJson)
+            } else if (ssConfigJson.isNotEmpty()) {
+                engine.setShadowsocksConfig(ssConfigJson)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to configure proxy node in Go engine")
+        }
+
+        val mitmMode = httpsFilteringEnabled &&
+            certDir.isNotEmpty() &&
+            wgConfigJson.isEmpty() &&
+            proxyConfigJson.isEmpty() &&
+            ssConfigJson.isEmpty()
+        engine.setUseTcpStack(mitmMode)
+
+        if (mitmMode) {
             try {
                 val pm = context.packageManager
-                val uids = selectedBrowsers.mapNotNull { pkg ->
-                    try {
-                        pm.getPackageUid(pkg, 0)
-                    } catch (e: Exception) {
-                        null
-                    }
+                val browsers = selectedBrowsers ?: TunnelRuleLoader.loadPresetBrowsers(context)
+                val uids = browsers.mapNotNull { pkg ->
+                    runCatching { pm.getPackageUid(pkg, 0) }.getOrNull()
                 }.joinToString(",")
 
-                // Enable the stack, init CA + filter, register UIDs.
-                engine.setUseTcpStack(true)
                 engine.startStackMitm(certDir)
                 engine.setMitmAllowedUIDs(uids)
                 engine.setFilterHttp3(filterHttp3)
 
-                // Load curated passthrough domains (banking, payment,
-                // gov, secure messaging, etc.) from assets so cert-
-                // pinned apps and security-critical traffic don't
-                // attempt MITM. Sourced from
-                // github.com/pass-with-high-score/HttpsExclusions.
-                try {
-                    val passthrough = context.assets.open("https_passthrough.txt")
-                        .bufferedReader().use { it.readText() }
-                    engine.setExtraPassthroughSuffixes(passthrough)
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to load https_passthrough.txt asset")
-                }
-
-                Timber.d("HTTPS filtering via userspace TCP/IP stack (browsers=${selectedBrowsers.size})")
+                TunnelRuleLoader.loadExtraPassthrough(context, engine)
+                Timber.d("HTTPS filtering via userspace TCP/IP stack (browsers=${browsers.size}, uids=$uids)")
             } catch (e: Exception) {
                 Timber.e(e, "Failed to init stack MITM on VPN boot")
             }
@@ -348,7 +330,9 @@ class GoTunnelAdapter(
         setupUidResolver()
         setupAppUidResolver()
 
-        // Give Go the paths to the Mmap logs so it can read them natively for max speed
+        setBlockDohBypass(blockDohBypass)
+        setBlockWebRtc(blockWebRtc)
+
         updateTries()
         updateCosmeticRules()
 
@@ -374,7 +358,7 @@ class GoTunnelAdapter(
             Timber.d("Starting Go tunnel engine in WIREGUARD mode (fd=$fd)")
             engine.start(fd.toLong(), protector, wgConfigJson)
         } else {
-            Timber.d("Starting Go tunnel engine in FULL-TUNNEL mode (fd=$fd, mitm=${httpsFilteringEnabled && certDir.isNotEmpty()})")
+            Timber.d("Starting Go tunnel engine in FULL-TUNNEL mode (fd=$fd, mitm=$mitmMode)")
             engine.startFull(fd.toLong(), protector)
         }
     }
@@ -434,81 +418,63 @@ class GoTunnelAdapter(
     /**
      * Stop the Go tunnel engine.
      */
+    fun isEngineRunning(): Boolean = engine.isRunning
+
     fun stop() {
         isRunning = false
         engine.stop()
         Timber.d("Go tunnel engine stopped")
     }
 
-    /**
-     * Update the Go engine with the latest Trie and Bloom Filter file paths dynamically.
-     * Paths are CSV-formatted strings (e.g., "path1,path2,path3").
-     */
     fun updateTries() {
-        engine.setTries(
-            filterRepo.getAdTriePath(),
-            filterRepo.getSecurityTriePath(),
-            filterRepo.getAdBloomPath(),
-            filterRepo.getSecurityBloomPath()
-        )
+        engine.setTries(filterRepo.getAdTriePath(), filterRepo.getSecurityTriePath(), filterRepo.getAdBloomPath(), filterRepo.getSecurityBloomPath())
     }
 
-    /**
-     * Load the latest cosmetic rules + scriptlet rules from the cache
-     * and send them to the Go engine.
-     */
     fun updateCosmeticRules() {
-        try {
-            val cssPath = filterRepo.getCosmeticCssPath()
-            if (cssPath != null) {
-                val file = java.io.File(cssPath)
-                if (file.exists() && file.length() > 0) {
-                    val cssSnippet = file.readText()
-                    engine.setCosmeticCSS(cssSnippet)
-                    Timber.d("Sent ${cssSnippet.length} bytes of cosmetic CSS to Go engine")
-                } else {
-                    engine.setCosmeticCSS("")
-                }
-            } else {
-                engine.setCosmeticCSS("")
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to load cosmetic CSS for engine")
-            engine.setCosmeticCSS("")
-        }
-
-        try {
-            val sp = filterRepo.getScriptletsPath()
-            if (sp != null) {
-                val text = java.io.File(sp).readText()
-                engine.setScriptletRules(text)
-                Timber.d("Sent ${text.length} bytes of scriptlet rules to Go engine")
-            } else {
-                engine.setScriptletRules("")
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Failed to load scriptlet rules for engine")
-            engine.setScriptletRules("")
-        }
+        TunnelRuleLoader.updateCosmeticRules(context, engine, filterRepo)
     }
 
-    /**
-     * Get engine statistics as JSON.
-     */
-    fun getStats(): String {
-        return engine.stats
+    fun getStats(): String = engine.stats
+
+    fun setRulesetConfig(content: String): Long = runCatching {
+        val count = engine.setRulesetConfig(content)
+        TunnelRuleLoader.loadCachedRemoteRulesets(context, engine)
+        TunnelRuleLoader.applyProfileDnsIfPresent(engine) { p, f -> configureDns("PLAIN", p, f, "") }
+        count
+    }.onFailure { Timber.e(it, "Failed to set ruleset config") }.getOrDefault(0L)
+
+    fun clearRulesetConfig() = engine.clearRulesetConfig()
+
+    fun configureTailscale(state: String, url: String, key: String): String =
+        runCatching { engine.configureTailscale(state, url, key) }.getOrDefault("{}")
+
+    fun startTailscaleAuth(host: String): String =
+        runCatching { engine.startTailscaleAuth(host) }.getOrDefault("")
+
+    fun startTailscaleSession(host: String) {
+        runCatching { engine.startTailscaleSession(host) }
     }
+
+    fun stopTailscale() {
+        runCatching { engine.stopTailscale() }
+    }
+
+    fun getTailscaleStatus(): String =
+        runCatching { engine.tailscaleStatus }.getOrDefault("""{"state":"DISCONNECTED"}""")
+
+    fun getTailscaleState(): String =
+        runCatching { engine.tailscaleState }.getOrDefault("{}")
+
+    fun setTailscaleExitNode(id: Long) {
+        runCatching { engine.setTailscaleExitNode(id) }
+    }
+
+    fun isTailscaleActive(): Boolean =
+        runCatching { engine.isTailscaleActive }.getOrDefault(false)
 
     companion object {
-        /**
-         * Convert DNS query type number to human-readable string.
-         * DNS types defined in RFC 1035 & 3596.
-         */
         private fun dnsQueryTypeToString(type: Int): String = when (type) {
-            1 -> "A"
-            28 -> "AAAA"
-            5 -> "CNAME"
-            else -> "OTHER"
+            1 -> "A"; 28 -> "AAAA"; 5 -> "CNAME"; else -> "OTHER"
         }
     }
 }

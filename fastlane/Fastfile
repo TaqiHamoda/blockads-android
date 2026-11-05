@@ -17,7 +17,54 @@ platform :android do
   desc "Build release APK"
   lane :build_release do
     gradle(
-          task: "assembleRelease"
+      task: ":app:assembleFdroidRelease :blockadstv:assembleFdroidRelease"
+    )
+  end
+
+  desc "Build store release AAB"
+  lane :build_store_bundle do
+    gradle(
+      task: ":app:bundleStoreRelease",
+      properties: { "tunnel.source" => "local" }
+    )
+  end
+
+  desc "Deploy store release AAB to internal testing track (skips title, des, screenshots, images)"
+  lane :internal do
+    upload_to_play_store(
+      track: "internal",
+      aab: "app/build/outputs/bundle/storeRelease/app-store-release.aab",
+      json_key: "fastlane/play-store-key.json",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: false,
+      skip_upload_apk: true
+    )
+  end
+
+  desc "Promote internal to closed beta (skips title, des, screenshots, images)"
+  lane :beta do
+    upload_to_play_store(
+      track: "internal",
+      track_promote_to: "beta",
+      json_key: "fastlane/play-store-key.json",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Deploy store release AAB to production (skips title, des, screenshots, images)"
+  lane :production do
+    upload_to_play_store(
+      track: "production",
+      aab: "app/build/outputs/bundle/storeRelease/app-store-release.aab",
+      json_key: "fastlane/play-store-key.json",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      release_status: "draft"
     )
   end
 

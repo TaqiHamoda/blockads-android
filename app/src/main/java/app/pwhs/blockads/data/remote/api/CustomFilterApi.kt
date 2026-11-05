@@ -35,17 +35,40 @@ class CustomFilterApi(
      * Calls the backend to compile a raw filter URL into optimized binary files.
      *
      * @param filterUrl The raw filter list URL to compile (e.g., "https://example.com/filter.txt")
-     * @param force If true, forces recompilation even if cached
      * @return [BuildResponse] containing the download URL and metadata
      * @throws CustomFilterException on API errors
      */
     suspend fun buildFilter(filterUrl: String): BuildResponse =
+        buildFilter(listOf(filterUrl))
+
+    /**
+     * Calls the backend to compile multiple raw filter URLs into a single merged binary package.
+     *
+     * @param urls The list of filter list URLs to merge and compile
+     * @param name Optional custom name for the merged filter
+     * @return [BuildResponse] containing the download URL and metadata
+     * @throws CustomFilterException on API errors
+     */
+    suspend fun buildFilter(urls: List<String>, name: String? = null): BuildResponse =
         withContext(Dispatchers.IO) {
             try {
                 val endpoint = BUILD_ENDPOINT
-                val requestBody = """{"url":"$filterUrl"}"""
+                val cleanUrls = urls.map { it.trim() }.filter { it.isNotBlank() }
+                if (cleanUrls.isEmpty()) {
+                    throw CustomFilterException("No URLs provided")
+                }
 
-                Timber.d("Calling build API: $endpoint with url=$filterUrl")
+                val requestBody = if (cleanUrls.size == 1 && name.isNullOrBlank()) {
+                    """{"url":"${escapeJson(cleanUrls.first())}"}"""
+                } else {
+                    val urlsJson = cleanUrls.joinToString(separator = ",", prefix = "[", postfix = "]") {
+                        "\"${escapeJson(it)}\""
+                    }
+                    val nameJson = if (!name.isNullOrBlank()) ",\"name\":\"${escapeJson(name.trim())}\"" else ""
+                    """{"urls":$urlsJson$nameJson}"""
+                }
+
+                Timber.d("Calling build API: $endpoint with body=$requestBody")
 
                 val response = client.post(endpoint) {
                     contentType(ContentType.Application.Json)
@@ -56,7 +79,8 @@ class CustomFilterApi(
                 Timber.d("Build API response: $responseText")
 
                 if (response.status.value != 200) {
-                    val errorMsg = extractString(responseText, "error")
+                    val errorMsg = extractString(responseText, "message")
+                        ?: extractString(responseText, "error")
                         ?: "Server returned ${response.status.value}"
                     throw CustomFilterException("Build failed: $errorMsg")
                 }
@@ -100,6 +124,13 @@ class CustomFilterApi(
         val pattern = "\"$key\"\\s*:\\s*(\\d+)".toRegex()
         return pattern.find(json)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
     }
+
+    private fun escapeJson(str: String): String =
+        str.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
 }
 
 /**

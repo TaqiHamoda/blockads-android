@@ -1,0 +1,45 @@
+name: Update GeoIP Database
+
+on:
+  schedule:
+    # Run every Sunday at 03:00 UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  update-geoip:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Generate GeoIP Database
+        run: |
+          mkdir -p dist
+          python3 scripts/generate_geoip.py --latest --gzip --output dist/geoip_ipv4.bin
+
+      - name: Publish GeoIP Release Asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="geoip-database"
+          TITLE="GeoIP Database (Weekly Auto-Update)"
+          BODY="Automated weekly build of GeoIP IPv4 database from sapics/ip-location-db (CC0 1.0 Universal)."
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Updating existing release $TAG_NAME..."
+            gh release upload "$TAG_NAME" dist/geoip_ipv4.bin dist/geoip_ipv4.bin.gz --clobber
+          else
+            echo "Creating new release $TAG_NAME..."
+            gh release create "$TAG_NAME" dist/geoip_ipv4.bin dist/geoip_ipv4.bin.gz \
+              --title "$TITLE" \
+              --notes "$BODY"
+          fi

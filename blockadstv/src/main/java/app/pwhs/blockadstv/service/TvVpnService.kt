@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -67,6 +68,17 @@ class TvVpnService : VpnService() {
             }
             context.startService(intent)
         }
+
+        fun requestRestart(context: Context) {
+            val s = _state.value
+            if (s == VpnState.RUNNING) {
+                stop(context)
+                val intent = Intent(context, TvVpnService::class.java).apply {
+                    action = ACTION_START
+                }
+                androidx.core.content.ContextCompat.startForegroundService(context, intent)
+            }
+        }
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
@@ -74,6 +86,7 @@ class TvVpnService : VpnService() {
     private lateinit var filterRepo: FilterListRepository
     private lateinit var tvPrefs: TvPreferences
     private lateinit var dnsLogDao: DnsLogDao
+    private lateinit var firewallManager: TvFirewallManager
     private lateinit var goTunnelAdapter: GoTunnelAdapter
     private lateinit var appNameResolver: AppNameResolver
 
@@ -83,6 +96,7 @@ class TvVpnService : VpnService() {
         filterRepo = koin.get()
         tvPrefs = koin.get()
         dnsLogDao = koin.get()
+        firewallManager = koin.get()
 
         appNameResolver = AppNameResolver(this)
         goTunnelAdapter = GoTunnelAdapter(
@@ -91,6 +105,7 @@ class TvVpnService : VpnService() {
             dnsLogDao = dnsLogDao,
             scope = serviceScope,
             appNameResolver = appNameResolver,
+            firewallManager = firewallManager,
         )
     }
 
@@ -137,20 +152,28 @@ class TvVpnService : VpnService() {
                 Timber.d("Ad bloom paths: '${filterRepo.getAdBloomPath()}'")
                 Timber.d("Security bloom paths: '${filterRepo.getSecurityBloomPath()}'")
 
-                // Phase 2: Read preferences
+                // Phase 2: Read preferences & firewall rules
                 Timber.d("Phase 2: Reading preferences...")
+                firewallManager.loadRules()
                 val upstreamDns = tvPrefs.upstreamDns.first()
                 val fallbackDns = tvPrefs.fallbackDns.first()
                 val dnsProtocol = tvPrefs.dnsProtocol.first()
                 val dohUrl = tvPrefs.dohUrl.first()
+                val odohRelayUrl = tvPrefs.odohRelayUrl.first()
                 val dnsResponseType = tvPrefs.dnsResponseType.first()
                 val whitelistedApps = tvPrefs.getWhitelistedAppsSnapshot()
+                val routingMode = tvPrefs.getRoutingModeSnapshot()
+                val isProxyVpn = routingMode == TvPreferences.ROUTING_MODE_PROXY_VPN
+                val activeProxy = if (isProxyVpn) tvPrefs.getActiveProxyProfileSnapshot() else null
+                val proxyProtocol = activeProxy?.protocol?.value ?: ""
+                val proxyConfigJson = activeProxy?.toEngineJson() ?: ""
+
                 Timber.d("DNS: protocol=$dnsProtocol, primary=$upstreamDns, fallback=$fallbackDns")
-                Timber.d("Response type: $dnsResponseType, whitelisted apps: ${whitelistedApps.size}")
+                Timber.d("Response type: $dnsResponseType, routingMode: $routingMode, proxy: ${activeProxy?.displayName}")
 
                 // Phase 3: Establish VPN
-                Timber.d("Phase 3: Establishing VPN tunnel...")
-                val established = establishVpn(whitelistedApps)
+                Timber.d("Phase 3: Establishing VPN tunnel (isProxyVpn=$isProxyVpn)...")
+                val established = establishVpn(whitelistedApps, isProxyVpn)
                 if (!established) {
                     Timber.e("Failed to establish VPN")
                     stopVpn()
@@ -163,9 +186,10 @@ class TvVpnService : VpnService() {
 
                 withContext(Dispatchers.Main) {
                     val nm = getSystemService(NotificationManager::class.java)
+                    val title = if (isProxyVpn) "BlockAds TV Proxy Active" else "BlockAds TV Active"
                     nm.notify(
                         NOTIFICATION_ID,
-                        buildNotification("BlockAds TV Active", "$domainCount filter rules loaded")
+                        buildNotification(title, "$domainCount filter rules loaded")
                     )
                 }
 
@@ -175,6 +199,7 @@ class TvVpnService : VpnService() {
                     primary = upstreamDns,
                     fallback = fallbackDns,
                     dohUrl = dohUrl,
+                    odohRelayUrl = odohRelayUrl,
                 )
                 goTunnelAdapter.setBlockResponseType(dnsResponseType)
                 Timber.d("Go engine configured, starting tunnel...")
@@ -189,12 +214,44 @@ class TvVpnService : VpnService() {
                     }
                 }
 
+                // Dynamically update DNS config whenever DNS settings change
+                launch {
+                    combine(
+                        tvPrefs.dnsProtocol,
+                        tvPrefs.upstreamDns,
+                        tvPrefs.fallbackDns,
+                        tvPrefs.dohUrl,
+                        tvPrefs.odohRelayUrl,
+                    ) { protocol, primary, fallback, doh, relay ->
+                        listOf(protocol.name, primary, fallback, doh, relay)
+                    }.drop(1).collectLatest { config ->
+                        Timber.d("DNS config changed, hot-updating Go tunnel DNS: $config")
+                        goTunnelAdapter.configureDns(
+                            protocol = config[0],
+                            primary = config[1],
+                            fallback = config[2],
+                            dohUrl = config[3],
+                            odohRelayUrl = config[4],
+                        )
+                    }
+                }
+
+                // Dynamically update DNS response type
+                launch {
+                    tvPrefs.dnsResponseType.drop(1).collectLatest { responseType ->
+                        Timber.d("DNS response type changed to $responseType")
+                        goTunnelAdapter.setBlockResponseType(responseType)
+                    }
+                }
+
                 vpnInterface?.let {
                     goTunnelAdapter.start(
                         vpnInterface = it,
                         socketProtector = { fd ->
                             try { protect(fd) } catch (e: Exception) { false }
                         },
+                        proxyProtocol = proxyProtocol,
+                        proxyConfigJson = proxyConfigJson,
                     )
                 }
 
@@ -205,7 +262,7 @@ class TvVpnService : VpnService() {
         }
     }
 
-    private fun establishVpn(whitelistedApps: Set<String>): Boolean {
+    private fun establishVpn(whitelistedApps: Set<String>, isProxyVpn: Boolean): Boolean {
         if (VpnService.prepare(this) != null) {
             Timber.e("VPN not prepared or permission revoked")
             return false
@@ -213,15 +270,21 @@ class TvVpnService : VpnService() {
 
         return try {
             val builder = Builder()
-                .setSession("BlockAds TV")
-                .addAddress("10.0.0.2", 32)
-                .addRoute("10.0.0.1", 32)
-                .addDnsServer("10.0.0.1")
+                .setSession(if (isProxyVpn) "BlockAds TV Proxy" else "BlockAds TV")
+                .addAddress("100.64.100.2", 32)
                 .addAddress("fd00::2", 128)
-                .addRoute("fd00::1", 128)
+                .addDnsServer("100.64.100.1")
                 .addDnsServer("fd00::1")
-                .setBlocking(true)
-                .setMtu(1500)
+                .setBlocking(false)
+                .setMtu(1350)
+
+            if (isProxyVpn) {
+                builder.addRoute("0.0.0.0", 0)
+                builder.addRoute("::", 0)
+            } else {
+                builder.addRoute("100.64.100.1", 32)
+                builder.addRoute("fd00::1", 128)
+            }
 
             // Exclude our own app
             try {
@@ -250,6 +313,22 @@ class TvVpnService : VpnService() {
             }
 
             vpnInterface = builder.establish()
+            if (vpnInterface != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        val fd = vpnInterface!!.fileDescriptor
+                        val flags = android.system.Os.fcntlInt(fd, android.system.OsConstants.F_GETFL, 0)
+                        android.system.Os.fcntlInt(
+                            fd,
+                            android.system.OsConstants.F_SETFL,
+                            flags or android.system.OsConstants.O_NONBLOCK
+                        )
+                        Timber.d("TV TUN file descriptor set to O_NONBLOCK successfully")
+                    } catch (e: Exception) {
+                        Timber.w(e, "Failed to enforce O_NONBLOCK on TV TUN fd")
+                    }
+                }
+            }
             Timber.d("VPN interface established: ${vpnInterface != null}")
             vpnInterface != null
         } catch (e: Exception) {

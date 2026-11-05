@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <string name="clear_device_owner_confirm_message">Apakah Anda yakin ingin menghapus hak akses Pemilik Perangkat? Ini akan menghapus semua kebijakan administratif dan mengizinkan aplikasi diinstal ulang atau dihapus.</string>
+    <string name="clear_device_owner_confirm_title">Hapus Hak Akses Pemilik Perangkat?</string>
+    <string name="delete">Hapus</string>
+    <string name="device_admin_description">Administrator Perangkat untuk menegakkan persistensi dan batasan kebijakan untuk BlockAds.</string>
+    <string name="device_owner_cleared_success">Hak akses Pemilik Perangkat berhasil dihapus</string>
+    <string name="device_owner_clear_failed">Gagal menghapus hak akses Pemilik Perangkat</string>
+    <string name="lockdown_duration_10m">10 menit</string>
+    <string name="lockdown_duration_12h">12 jam</string>
+    <string name="lockdown_duration_1h">1 jam</string>
+    <string name="lockdown_duration_1m">1 menit</string>
+    <string name="lockdown_duration_24h">24 jam</string>
+    <string name="lockdown_duration_30m">30 menit</string>
+    <string name="lockdown_duration_5m">5 menit</string>
+    <string name="lockdown_duration_6h">6 jam</string>
+    <plurals name="lockdown_duration_hours" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d jam</item>
+    </plurals>
+    <plurals name="lockdown_duration_minutes" tools:ignore="MissingQuantity,MissingTranslation">
+        <item quantity="other">%1$d menit</item>
+    </plurals>
+    <string name="lockdown_screen_add_blacklist">Tambahkan Situs Web ke Daftar Hitam</string>
+    <string name="lockdown_screen_cancel">Batalkan Waktu Tunggu</string>
+    <string name="lockdown_screen_cancel_desc">Membatalkan akan mengatur ulang penghitung waktu kembali ke durasi penuh.</string>
+    <string name="lockdown_screen_desc">Untuk mengubah pengaturan atau menonaktifkan pemblokiran iklan, Anda harus memulai waktu tunggu.</string>
+    <string name="lockdown_screen_duration">Durasi Pengatur Waktu: %1$s</string>
+    <string name="lockdown_screen_start">Mulai Waktu Tunggu</string>
+    <string name="lockdown_screen_title">BlockAds Terkunci</string>
+    <string name="settings_device_owner_clear_owner">Hapus Pemilik Perangkat</string>
+    <string name="settings_device_owner_clear_owner_desc">Mencabut hak akses administratif Pemilik Perangkat dari BlockAds.</string>
+    <string name="settings_device_owner_enforce_restrictions">Batasan Perangkat</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Aktifkan untuk menerapkan batasan tingkat aplikasi (memblokir alat pengembang, dll). Nonaktifkan untuk menghapusnya.</string>
+    <string name="settings_device_owner_section_desc">Kelola batasan Pemilik Perangkat. Hanya terlihat karena BlockAds adalah Pemilik Perangkat.</string>
+    <string name="settings_device_owner_section_title">Kontrol Pemilik Perangkat</string>
+    <string name="settings_lockdown_duration_desc">Waktu yang harus Anda tunggu untuk membuka kunci aplikasi</string>
+    <string name="settings_lockdown_duration_title">Durasi Waktu Tunggu</string>
+    <string name="settings_lockdown_mode_desc">Saat diaktifkan, Anda tidak dapat mematikan VPN atau mengakses pengaturan tanpa menunggu waktu tunggu habis.</string>
+    <string name="settings_lockdown_mode_title">Mode Kuncian VPN</string>
+    <string name="settings_lockdown_section_desc">Paksa waktu tunggu untuk menonaktifkan pemblokir iklan. Membantu mencegah kekambuhan impulsif.</string>
+    <string name="settings_lockdown_section_title">Kontrol Impuls &amp; Kuncian</string>
+</resources>
