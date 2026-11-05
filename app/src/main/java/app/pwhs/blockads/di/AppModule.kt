@@ -22,6 +22,7 @@ import app.pwhs.blockads.ui.whitelist.AppWhitelistViewModel
 import app.pwhs.blockads.ui.appmanagement.AppManagementViewModel
 import app.pwhs.blockads.ui.customrules.CustomRulesViewModel
 import app.pwhs.blockads.ui.domainrules.DomainRulesViewModel
+import app.pwhs.blockads.ui.LockdownViewModel
 import app.pwhs.blockads.ui.firewall.FirewallViewModel
 import app.pwhs.blockads.ui.splash.SplashViewModel
 import app.pwhs.blockads.ui.wireguard.WireGuardEditViewModel
@@ -237,6 +238,12 @@ val appModule = module {
     viewModel {
         DomainRulesViewModel(
             whitelistDomainDao = get(),
+            customDnsRuleDao = get(),
+            application = androidApplication()
+        )
+    }
+    viewModel {
+        LockdownViewModel(
             customDnsRuleDao = get(),
             application = androidApplication()
         )

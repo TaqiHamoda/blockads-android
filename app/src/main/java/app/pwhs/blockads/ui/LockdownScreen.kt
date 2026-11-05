@@ -1,6 +1,5 @@
 package app.pwhs.blockads.ui
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -10,22 +9,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.pwhs.blockads.R
-import app.pwhs.blockads.data.dao.CustomDnsRuleDao
-import app.pwhs.blockads.data.entities.CustomDnsRule
-import app.pwhs.blockads.data.entities.RuleType
-import app.pwhs.blockads.service.ServiceController
 import app.pwhs.blockads.ui.domainrules.dialog.AddDomainDialog
+import app.pwhs.blockads.ui.event.UiEventEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun LockdownScreen(
@@ -34,13 +28,12 @@ fun LockdownScreen(
     onStartCooldown: (Long) -> Unit,
     onCancelCooldown: () -> Unit,
     onUnlockComplete: () -> Unit,
-    onTimeTamperingDetected: () -> Unit
+    onTimeTamperingDetected: () -> Unit,
+    viewModel: LockdownViewModel = koinViewModel()
 ) {
     val appPrefs: app.pwhs.blockads.data.datastore.AppPreferences = org.koin.compose.koinInject()
-    val customDnsRuleDao: CustomDnsRuleDao = org.koin.compose.koinInject()
-    val context = LocalContext.current
-    val resources = LocalResources.current
-    val scope = rememberCoroutineScope()
+
+    UiEventEffect(viewModel.events)
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -243,36 +236,7 @@ fun LockdownScreen(
             isAllow = false,
             onDismiss = { showAddDialog = false },
             onAdd = { inputDomain ->
-                val cleanDomain = inputDomain.trim().lowercase()
-                if (cleanDomain.isNotBlank()) {
-                    scope.launch {
-                        val allRules = customDnsRuleDao.getAll()
-                        val exists = allRules.any {
-                            it.ruleType == RuleType.BLOCK && it.domain.equals(cleanDomain, ignoreCase = true)
-                        }
-                        if (!exists) {
-                            customDnsRuleDao.insert(
-                                CustomDnsRule(
-                                    rule = "||$cleanDomain^",
-                                    ruleType = RuleType.BLOCK,
-                                    domain = cleanDomain
-                                )
-                            )
-                            Toast.makeText(
-                                context,
-                                resources.getString(R.string.blocklist_domain_added, cleanDomain),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                            ServiceController.requestRestart(context)
-                        } else {
-                            Toast.makeText(
-                                context,
-                                resources.getString(R.string.blocklist_domain_already_exists),
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    }
-                }
+                viewModel.addBlocklistDomain(inputDomain)
                 showAddDialog = false
             }
         )
