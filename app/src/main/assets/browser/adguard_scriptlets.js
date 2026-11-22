@@ -7,6 +7,26 @@
     'use strict';
     if (window.__blockads_scriptlets_injected) return;
     window.__blockads_scriptlets_injected = true;
+    var __loggedEvents = {};
+    function logScriptlet(rule, detail) {
+        try {
+            var key = rule + '|' + (detail || '').slice(0, 60);
+            if (__loggedEvents[key]) return;
+            __loggedEvents[key] = 1;
+            if (window.__blockadsLogger && window.__blockadsLogger.log) window.__blockadsLogger.log(rule, location.href, detail || '');
+            else if (navigator.sendBeacon) navigator.sendBeacon('/__blockads_log__', JSON.stringify({ rule: rule, url: location.href, detail: detail || '' }));
+        } catch(e) {}
+    }
+    try {
+        var origEval = window.eval;
+        window.eval = function(code) {
+            if (typeof code === 'string' && /chp_ads_blocker_detector|adblock_detected|checkMultiple\(/i.test(code)) {
+                logScriptlet('+js(noeval-if, /chp_?ad/)', 'Prevented:\n' + code.slice(0, 600));
+                return undefined;
+            }
+            return origEval.apply(this, arguments);
+        };
+    } catch(e) {}
 
     // Immediate unblur & scroll unlock
     try {
@@ -104,7 +124,8 @@
         'cleverwebserver', 'adsboosters', '92mim', 'tzegilo', 'vr-gc', 'dd133', 'becorsolaom', 'apps2app', 'vignette',
         'roastoup', 'sandburstf2b9n', 'tokyo77', 'tokyo88', 'masuksini', 'playstake', 'akseslink', 'bumibola', 'tinig22', 'dwagg',
         'rancemalars', 'dwinnow', 'daleelerah', 'pinusrimbase', 'outsayremixed', 'aratireposed', 'geodistpterian', 'ukankingwithea', 'enaightdecipie', 'unlockr', 'mcw88vi',
-        '484r.com', 'llvpn.com', 'aichouphaugn', 'jnbhi', 'ay267', 'jomtingi', 'orbitsummit', 'highperformanceformat'
+        '484r.com', 'llvpn.com', 'aichouphaugn', 'jnbhi', 'ay267', 'jomtingi', 'orbitsummit', 'highperformanceformat',
+        'untimely-hello', 'sayyidvanglo', 'asiafilm.org', 's.click.aliexpress.com'
     ];
 
     function isAdOrMaliciousUrl(url) {
@@ -136,24 +157,9 @@
         return parts[parts.length - 1].trim();
     }
 
-    // Dummy Window proxy to satisfy callers expecting a Window object
     function createDummyWindow() {
-        var dummyLocation = {
-            _href: 'about:blank',
-            get href() { return this._href; },
-            set href(val) { console.info('[BlockAds] Blocked popup redirect to:', val); },
-            replace: function() {},
-            assign: function() {}
-        };
-        return {
-            closed: false,
-            focus: function() {},
-            blur: function() {},
-            close: function() {},
-            postMessage: function() {},
-            location: dummyLocation,
-            document: { write: function() {}, close: function() {} }
-        };
+        var dl = { _href: 'about:blank', get href() { return this._href; }, set href(v) {}, replace: function() {}, assign: function() {} };
+        return { closed: false, focus: function() {}, blur: function() {}, close: function() {}, postMessage: function() {}, location: dl, document: { write: function() {}, close: function() {} } };
     }
 
     window.open = function(url, target, features) {
@@ -161,7 +167,7 @@
 
         // Block if not explicit recent human tap OR points to ad/gambling URL
         if (!isRecentUserAction || isAdOrMaliciousUrl(url)) {
-            console.info('[BlockAds] Prevented suspicious popup:', url);
+            logScriptlet('+js(prevent-popup)', String(url || ''));
             return createDummyWindow();
         }
 
@@ -362,6 +368,15 @@
             if (sn) { sn.remove(); if (document.body) document.body.style.overflow = ''; }
             var ap = document.getElementById('ad-popup');
             if (ap) ap.remove();
+            var chpTitle = document.querySelector('.adblock_title');
+            if (chpTitle) {
+                var chpRoot = chpTitle.closest('body > div') || chpTitle.parentElement;
+                if (chpRoot && chpRoot !== document.body) chpRoot.remove();
+                logScriptlet('+js(remove-anti-adblock)', 'Removed CHP anti-adblock modal');
+                document.querySelectorAll('.blur-content').forEach(function(b) { b.classList.remove('blur-content'); });
+                if (document.documentElement) document.documentElement.style.overflow = 'auto';
+                if (document.body) document.body.style.overflow = 'auto';
+            }
             document.querySelectorAll('html > iframe, body > iframe[style*="fixed"], iframe[style*="2147483647"], div[style*="2147483647"]').forEach(function(ti) { ti.remove(); });
         } catch(e) {}
     }
@@ -435,7 +450,7 @@
             window.getComputedStyle = function(el, pseudo) {
                 var s = origGetComputedStyle.apply(this, arguments);
                 var cn = el && el.className && typeof el.className === 'string' ? el.className : '';
-                if (cn && (cn.indexOf('adsbox') !== -1 || cn.indexOf('pub_300x250') !== -1 || cn.indexOf('ad-placement') !== -1 || cn.indexOf('banner_ad') !== -1 || cn.indexOf('czlll-') !== -1 || cn.indexOf('da-tep') !== -1)) {
+                if (cn && (cn.indexOf('adsbox') !== -1 || cn.indexOf('pub_300x250') !== -1 || cn.indexOf('ad-placement') !== -1 || cn.indexOf('banner_ad') !== -1 || cn.indexOf('Ad-Container') !== -1 || cn.indexOf('czlll-') !== -1 || cn.indexOf('da-tep') !== -1)) {
                     return new Proxy(s, {
                         get: function(t, p) {
                             if (p === 'display') return 'block';
@@ -454,7 +469,7 @@
                 Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
                     get: function() {
                         var cn = this.className && typeof this.className === 'string' ? this.className : '';
-                        if (cn && (cn.indexOf('adsbox') !== -1 || cn.indexOf('pub_300x250') !== -1 || cn.indexOf('banner_ad') !== -1 || cn.indexOf('czlll-') !== -1 || cn.indexOf('da-tep') !== -1)) {
+                        if (cn && (cn.indexOf('adsbox') !== -1 || cn.indexOf('pub_300x250') !== -1 || cn.indexOf('banner_ad') !== -1 || cn.indexOf('Ad-Container') !== -1 || cn.indexOf('czlll-') !== -1 || cn.indexOf('da-tep') !== -1)) {
                             return 250;
                         }
                         return origOffsetHeight.get.apply(this);
@@ -467,7 +482,7 @@
         // Anti-Adblock Bait Unhide
         try {
             var baitStyle = document.createElement('style');
-            baitStyle.textContent = '#banner_ad, div#banner_ad, .pub_300x250, .adsbox, .adunit, .ad-zone, .ad-space { display: block !important; visibility: visible !important; width: 300px !important; min-width: 300px !important; max-width: 300px !important; height: 250px !important; min-height: 250px !important; max-height: 250px !important; left: -9999px !important; position: absolute !important; }';
+            baitStyle.textContent = '#banner_ad, div#banner_ad, .pub_300x250, .adsbox, .Ad-Container, .adunit, .ad-zone, .ad-space { display: block !important; visibility: visible !important; width: 300px !important; min-width: 300px !important; max-width: 300px !important; height: 250px !important; min-height: 250px !important; max-height: 250px !important; left: -9999px !important; position: absolute !important; }';
             (document.head || document.documentElement).appendChild(baitStyle);
         } catch(e) {}
 

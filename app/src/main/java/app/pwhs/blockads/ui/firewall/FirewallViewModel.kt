@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.data.entities.FirewallRule
 import app.pwhs.blockads.data.dao.FirewallRuleDao
+import app.pwhs.blockads.service.FirewallPromptManager
 import app.pwhs.blockads.service.ServiceController
 import app.pwhs.blockads.ui.common.AppInfoData
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -28,11 +30,19 @@ import kotlinx.coroutines.withContext
 class FirewallViewModel(
     private val appPrefs: AppPreferences,
     private val firewallRuleDao: FirewallRuleDao,
+    private val promptManager: FirewallPromptManager,
     application: Application
 ) : AndroidViewModel(application) {
 
     val firewallEnabled: StateFlow<Boolean> = appPrefs.firewallEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val promptEnabled: StateFlow<Boolean> = appPrefs.firewallPromptEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val pendingPromptCount: StateFlow<Int> = promptManager.pendingPrompts
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val firewallRules: StateFlow<List<FirewallRule>> = firewallRuleDao.getAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -56,6 +66,7 @@ class FirewallViewModel(
 
     private data class DataState(
         val enabled: Boolean = false,
+        val promptEnabled: Boolean = false,
         val loading: Boolean = true,
         val apps: List<AppInfoData> = emptyList(),
         val rules: List<FirewallRule> = emptyList(),
@@ -69,14 +80,16 @@ class FirewallViewModel(
         val configApp: AppInfoData? = null
     )
 
+    private val switchesFlow = combine(firewallEnabled, promptEnabled) { enabled, prompt -> enabled to prompt }
+
     private val dataFlow = combine(
-        firewallEnabled,
+        switchesFlow,
         isLoading,
         installedApps,
         firewallRules,
         enabledCount
-    ) { enabled, loading, apps, rules, count ->
-        DataState(enabled, loading, apps, rules, count)
+    ) { switches, loading, apps, rules, count ->
+        DataState(switches.first, switches.second, loading, apps, rules, count)
     }
 
     private val controlFlow = combine(
@@ -97,6 +110,7 @@ class FirewallViewModel(
         val rulesMap = data.rules.associateBy { it.packageName }
         FirewallUiState(
             isFirewallEnabled = data.enabled,
+            isPromptEnabled = data.promptEnabled,
             isLoading = data.loading,
             searchQuery = ctrl.query,
             filterType = ctrl.filter,
@@ -161,6 +175,7 @@ class FirewallViewModel(
     fun processIntent(intent: FirewallUiIntent) {
         when (intent) {
             is FirewallUiIntent.SetFirewallEnabled -> setFirewallEnabled(intent.enabled)
+            is FirewallUiIntent.SetPromptEnabled -> setPromptEnabled(intent.enabled)
             is FirewallUiIntent.UpdateSearchQuery -> _searchQuery.value = intent.query
             is FirewallUiIntent.SelectFilterType -> _filterType.value = intent.filterType
             is FirewallUiIntent.SelectTab -> _selectedTab.value = intent.tab
@@ -169,23 +184,28 @@ class FirewallViewModel(
             is FirewallUiIntent.CloseAppConfig -> _configuringApp.value = null
             is FirewallUiIntent.SaveRule -> {
                 saveRule(intent.rule)
-                _configuringApp.value = null
+                if (intent.dismissSheet) {
+                    _configuringApp.value = null
+                }
             }
             is FirewallUiIntent.DeleteRule -> {
                 deleteRule(intent.packageName)
-                _configuringApp.value = null
+                if (intent.dismissSheet) {
+                    _configuringApp.value = null
+                }
             }
             is FirewallUiIntent.ToggleAllUserApps -> {
                 val userPackages = _installedApps.value.filter { !it.isSystemApp }
-                val allEnabled = userPackages.isNotEmpty() && userPackages.all { it.packageName in (uiState.value.rulesMap) }
+                val allEnabled = userPackages.isNotEmpty() && userPackages.all { uiState.value.isBlocked(it.packageName) }
                 if (allEnabled) disableAllUserApps() else enableAllUserApps()
             }
             is FirewallUiIntent.ToggleAllSystemApps -> {
                 val sysPackages = _installedApps.value.filter { it.isSystemApp }
-                val allEnabled = sysPackages.isNotEmpty() && sysPackages.all { it.packageName in (uiState.value.rulesMap) }
+                val allEnabled = sysPackages.isNotEmpty() && sysPackages.all { uiState.value.isBlocked(it.packageName) }
                 if (allEnabled) disableAllSystemApps() else enableAllSystemApps()
             }
             is FirewallUiIntent.RefreshApps -> refreshApps()
+            is FirewallUiIntent.ReopenPrompts -> promptManager.clearSnoozed()
         }
     }
 
@@ -200,15 +220,23 @@ class FirewallViewModel(
         }
     }
 
+    fun setPromptEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appPrefs.setFirewallPromptEnabled(enabled)
+            if (enabled) appPrefs.setFirewallEnabled(true) else promptManager.clearAll()
+            ServiceController.requestRestart(getApplication<Application>().applicationContext)
+        }
+    }
+
     fun toggleAppFirewall(packageName: String) {
         viewModelScope.launch {
             val existing = firewallRuleDao.getByPackageName(packageName)
-            if (existing != null) {
-                firewallRuleDao.deleteByPackageName(packageName)
-            } else {
-                firewallRuleDao.insert(
-                    FirewallRule(packageName = packageName)
-                )
+            when {
+                existing == null -> firewallRuleDao.insert(FirewallRule(packageName = packageName))
+                !existing.isEnabled -> firewallRuleDao.insert(existing.copy(isEnabled = true))
+                // In prompt mode, unblocking is remembered as "allowed" so the app is not asked again
+                promptEnabled.value -> firewallRuleDao.insert(existing.copy(isEnabled = false))
+                else -> firewallRuleDao.deleteByPackageName(packageName)
             }
             ServiceController.requestRestart(getApplication<Application>().applicationContext)
         }
@@ -234,6 +262,7 @@ class FirewallViewModel(
                 .filter { !it.isSystemApp }
                 .map { FirewallRule(packageName = it.packageName) }
             firewallRuleDao.insertAll(userPackages)
+            blockExplicitlyAllowed(userPackages)
             ServiceController.requestRestart(getApplication<Application>().applicationContext)
         }
     }
@@ -254,6 +283,7 @@ class FirewallViewModel(
                 .filter { it.isSystemApp }
                 .map { FirewallRule(packageName = it.packageName) }
             firewallRuleDao.insertAll(systemPackages)
+            blockExplicitlyAllowed(systemPackages)
             ServiceController.requestRestart(getApplication<Application>().applicationContext)
         }
     }
@@ -266,5 +296,13 @@ class FirewallViewModel(
             firewallRuleDao.deleteByPackageNames(systemPackages)
             ServiceController.requestRestart(getApplication<Application>().applicationContext)
         }
+    }
+
+    // insertAll ignores existing rows, so remembered "allowed" rules must be flipped explicitly
+    private suspend fun blockExplicitlyAllowed(rules: List<FirewallRule>) {
+        val rulesMap = uiState.value.rulesMap
+        rules.mapNotNull { rulesMap[it.packageName] }
+            .filter { !it.isEnabled }
+            .forEach { firewallRuleDao.insert(it.copy(isEnabled = true)) }
     }
 }

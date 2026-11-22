@@ -6,21 +6,26 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,7 +68,10 @@ import org.koin.androidx.compose.koinViewModel
 fun HttpsFilteringScreen(
     onNavigateBack: () -> Unit,
     onNavigateToWizard: () -> Unit = {},
+    onNavigateToDebugLogs: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
+    showBackButton: Boolean = true,
     viewModel: HttpsFilteringViewModel = koinViewModel()
 ) {
     val isEnabled by viewModel.isEnabled.collectAsStateWithLifecycle()
@@ -73,7 +81,6 @@ fun HttpsFilteringScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val certExported by viewModel.certExported.collectAsStateWithLifecycle()
     val certStatus by viewModel.certStatus.collectAsStateWithLifecycle()
-    val filterHttp3 by viewModel.filterHttp3.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val resources = LocalResources.current
@@ -155,19 +162,42 @@ fun HttpsFilteringScreen(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = if (showBackButton) androidx.compose.material3.ScaffoldDefaults.contentWindowInsets else WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.https_filtering_title)) },
+                windowInsets = if (showBackButton) TopAppBarDefaults.windowInsets else WindowInsets(0, 0, 0, 0),
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    if (showBackButton) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.accessibility_navigate_back)
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToDebugLogs) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.accessibility_navigate_back)
+                            imageVector = Icons.Outlined.Terminal,
+                            contentDescription = stringResource(R.string.https_debug_logs_title),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = stringResource(R.string.https_settings_title),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = MaterialTheme.colorScheme.background,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary
                 )
             )
         },
@@ -187,13 +217,19 @@ fun HttpsFilteringScreen(
             val isCertInstalled = certStatus == CertStatus.INSTALLED
             val isCheckingCert = certStatus == CertStatus.CHECKING
 
-            LazyColumn(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                contentAlignment = Alignment.TopCenter
             ) {
+                LazyColumn(
+                    modifier = Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                 // ── Master Toggle + Status ─────────────────────────────
                 item {
                     MasterToggleCard(
@@ -283,46 +319,9 @@ fun HttpsFilteringScreen(
                     }
                 }
 
-                // ── HTTP/3 (QUIC) filtering toggle ────────────────────
-                if (isEnabled) {
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            )
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(R.string.https_filtering_http3_title),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.https_filtering_http3_desc),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Switch(
-                                    checked = filterHttp3,
-                                    onCheckedChange = { viewModel.toggleFilterHttp3(it) }
-                                )
-                            }
-                        }
-                    }
-                }
-
                 // Bottom spacer
                 item { Spacer(modifier = Modifier.height(32.dp)) }
+                }
             }
         }
     }

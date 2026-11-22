@@ -151,6 +151,18 @@ func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) 
 		}
 	}
 
+	// 0.5. Per-App Custom Rules Override
+	if e.appDomainChecker != nil && appName != "" && appName != "RootProxy" {
+		appOverride := e.appDomainChecker.CheckAppRule(domain, appName)
+		if appOverride == 0 {
+			e.standaloneForward(w, r, appName, startTime)
+			return
+		} else if appOverride == 1 {
+			e.standaloneBlock(w, r, "custom_app_rule", appName, startTime)
+			return
+		}
+	}
+
 	// 1. Custom Rules Override
 	if e.domainChecker != nil {
 		override := e.domainChecker.HasCustomRule(domain)
@@ -332,6 +344,9 @@ func (e *Engine) domainHasAAAA(domain string) bool {
 // no A record (NXDOMAIN / empty answer) is NOT retried — that's treated as
 // intentional filtering by the user's configured DNS.
 func (e *Engine) lookupIP(domain string) (net.IP, error) {
+	if ip := e.resolveTailscaleMagicDNS(domain); ip != nil {
+		return ip, nil
+	}
 	e.mu.Lock()
 	resolver := e.resolver
 	e.mu.Unlock()

@@ -14,10 +14,10 @@ platform :android do
     )
   end
 
-  desc "Build release APK"
+  desc "Build release APK (fdroid + github flavors)"
   lane :build_release do
     gradle(
-      task: ":app:assembleFdroidRelease :blockadstv:assembleFdroidRelease"
+      task: ":app:assembleFdroidRelease :blockadstv:assembleFdroidRelease :app:assembleGithubRelease :blockadstv:assembleGithubRelease"
     )
   end
 
@@ -65,6 +65,18 @@ platform :android do
       skip_upload_images: true,
       skip_upload_screenshots: true,
       release_status: "draft"
+    )
+  end
+
+  desc "Upload store listing text (title, descriptions) for all locales in fastlane/metadata/android"
+  lane :metadata do
+    upload_to_play_store(
+      json_key: "fastlane/play-store-key.json",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
     )
   end
 

@@ -3,6 +3,7 @@ package app.pwhs.blockads
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
@@ -14,9 +15,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.utils.LocaleHelper
@@ -31,6 +34,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.java.KoinJavaComponent.getKoin
 
 class MainActivity : ComponentActivity() {
@@ -60,23 +64,38 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun attachBaseContext(newBase: Context) {
-        // Apply saved locale for pre-API 33 devices
+        // Apply saved locale for pre-API 33 devices without stalling the main thread indefinitely.
         val appPrefs = AppPreferences(newBase)
-        val savedLang = runBlocking { appPrefs.appLanguage.first() }
+        val savedLang = runBlocking(Dispatchers.IO) {
+            withTimeoutOrNull(500L) { appPrefs.appLanguage.first() } ?: AppPreferences.LANGUAGE_SYSTEM
+        }
         super.attachBaseContext(LocaleHelper.wrapContext(newBase, savedLang))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Apply hide-from-recents preference
-        val appPrefsInit = AppPreferences(this)
-        val hideFromRecents = runBlocking { appPrefsInit.hideFromRecents.first() }
-        val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        am.appTasks.firstOrNull()?.setExcludeFromRecents(hideFromRecents)
+        // Apply hide-from-recents preference off the critical startup path.
+        val appPrefsInit: AppPreferences = getKoin().get()
+        lifecycleScope.launch(Dispatchers.IO) {
+            val hideFromRecents = appPrefsInit.hideFromRecents.first()
+            withContext(Dispatchers.Main) {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                am.appTasks.firstOrNull()?.setExcludeFromRecents(hideFromRecents)
+            }
+        }
 
         enableEdgeToEdge()
         setContent {
+            val isLargeScreen = LocalConfiguration.current.smallestScreenWidthDp >= 600
+            LaunchedEffect(isLargeScreen) {
+                requestedOrientation = if (isLargeScreen) {
+                    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+            }
+
             val appPrefs: AppPreferences = getKoin().get()
             val themeMode by appPrefs.themeMode.collectAsState(initial = AppPreferences.THEME_SYSTEM)
             val accentColor by appPrefs.accentColor.collectAsState(initial = AppPreferences.ACCENT_GREEN)

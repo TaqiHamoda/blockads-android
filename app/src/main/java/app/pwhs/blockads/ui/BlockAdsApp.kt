@@ -12,6 +12,7 @@ import app.pwhs.blockads.ui.data.HomeAppKey
 import app.pwhs.blockads.ui.data.OnboardingKey
 import app.pwhs.blockads.ui.data.SplashKey
 import app.pwhs.blockads.ui.dialog.VPNConflictDialog
+import app.pwhs.blockads.ui.firewall.prompt.FirewallPromptHost
 import app.pwhs.blockads.ui.onboarding.OnboardingScreen
 import app.pwhs.blockads.ui.splash.SplashScreen
 import kotlinx.coroutines.launch
@@ -39,7 +40,7 @@ fun BlockAdsApp(
     val duration by appPrefs.lockdownDuration.collectAsState(initial = 300000L)
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         NavDisplay(
             backStack = backStack,
             onBack = { if (backStack.size > 1) backStack.removeLastOrNull() },
@@ -66,22 +67,24 @@ fun BlockAdsApp(
                     )
                 }
                 entry<HomeAppKey> {
+                    FirewallPromptHost()
                     HomeApp(
                         onRequestVpnPermission = onRequestVpnPermission,
                         onShowVpnConflictDialog = onShowVpnConflictDialog
                     )
                 }
+
             }
         )
-        
+
         if (isLocked) {
             LockdownScreen(
                 cooldownStart = cooldownStart,
                 duration = duration,
                 onStartCooldown = { timestamp ->
-                    coroutineScope.launch { 
+                    coroutineScope.launch {
                         appPrefs.setLastActiveBaselines(timestamp, android.os.SystemClock.elapsedRealtime())
-                        appPrefs.setCooldownStartTimestamp(timestamp) 
+                        appPrefs.setCooldownStartTimestamp(timestamp)
                     }
                 },
                 onCancelCooldown = {

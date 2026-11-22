@@ -47,6 +47,7 @@ class VpnEngineCoordinatorTest {
         every { safeSearchEnabled } returns flowOf(true)
         every { youtubeRestrictedMode } returns flowOf(false)
         every { firewallEnabled } answers { flowOf(this@VpnEngineCoordinatorTest.firewallEnabled) }
+        every { firewallPromptEnabled } returns flowOf(false)
         every { dnsProviderId } answers { flowOf(providerId) }
         every { odohRelayUrl } returns flowOf("")
         every { splitDnsZones } returns flowOf("lan")
@@ -64,6 +65,7 @@ class VpnEngineCoordinatorTest {
         coEvery { getTrustedSsidsSnapshot() } returns emptySet()
         coEvery { getActiveProxyTypeSnapshot() } returns AppPreferences.PROXY_TYPE_WIREGUARD
         coEvery { getSsProfileSnapshot() } returns null
+        coEvery { getSniProxyRulesJsonSnapshot() } returns ""
         every { tailscale } returns mockk {
             coEvery { isEnabledSnapshot() } returns false
             coEvery { getStateJsonSnapshot() } returns ""
@@ -77,7 +79,7 @@ class VpnEngineCoordinatorTest {
         every { domainCountFlow } returns this@VpnEngineCoordinatorTest.domainCount
         coEvery { loadAllEnabledFilters() } returns Result.success(100)
     }
-    private val firewallDao: FirewallRuleDao = mockk { coEvery { getEnabledRules() } returns emptyList() }
+    private val firewallDao: FirewallRuleDao = mockk { coEvery { getAllSnapshot() } returns emptyList() }
     private var systemDns = listOf("192.168.1.1")
     private val network: Network = mockk()
     private val cm: ConnectivityManager = mockk {
@@ -88,6 +90,7 @@ class VpnEngineCoordinatorTest {
     private val context: Context = mockk {
         every { getSystemService(Context.CONNECTIVITY_SERVICE) } returns cm
         every { filesDir } returns testDir
+        every { packageManager } returns mockk(relaxed = true)
     }
     private val adapter: GoTunnelAdapter = mockk(relaxed = true)
     private val tun: ParcelFileDescriptor = mockk()

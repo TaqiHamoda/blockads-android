@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -22,7 +24,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,12 +34,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import app.pwhs.blockads.R
 import app.pwhs.blockads.data.entities.ProxyProtocol
+
+val ProxyFieldShape = RoundedCornerShape(12.dp)
+
+@Composable
+fun proxyFieldColors(): TextFieldColors = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surface,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+    focusedBorderColor = MaterialTheme.colorScheme.primary
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -212,6 +227,76 @@ fun CredentialsCard(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                ProxyProtocol.SOCKS5, ProxyProtocol.HTTP, ProxyProtocol.HTTPS -> {
+                    OutlinedTextField(
+                        value = state.username,
+                        onValueChange = { onIntent(ProxyEditIntent.SetUsername(it)) },
+                        label = { Text("Username (optional)") },
+                        singleLine = true,
+                        shape = ProxyFieldShape,
+                        colors = proxyFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    PasswordField(
+                        value = state.password,
+                        error = state.errors[ProxyEditViewModel.KEY_PASSWORD],
+                        onValueChange = { onIntent(ProxyEditIntent.SetPassword(it)) }
+                    )
+                }
+
+                ProxyProtocol.SOCKS4 -> {
+                    OutlinedTextField(
+                        value = state.username,
+                        onValueChange = { onIntent(ProxyEditIntent.SetUsername(it)) },
+                        label = { Text("User ID (optional)") },
+                        singleLine = true,
+                        shape = ProxyFieldShape,
+                        colors = proxyFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                ProxyProtocol.SSH -> {
+                    val usernameError = state.errors[ProxyEditViewModel.KEY_USERNAME]
+                    OutlinedTextField(
+                        value = state.username,
+                        onValueChange = { onIntent(ProxyEditIntent.SetUsername(it)) },
+                        label = { Text("Username") },
+                        isError = usernameError != null,
+                        supportingText = usernameError?.let { msg -> { Text(msg) } },
+                        singleLine = true,
+                        shape = ProxyFieldShape,
+                        colors = proxyFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    PasswordField(
+                        value = state.password,
+                        error = state.errors[ProxyEditViewModel.KEY_PASSWORD],
+                        onValueChange = { onIntent(ProxyEditIntent.SetPassword(it)) }
+                    )
+                    OutlinedTextField(
+                        value = state.privateKey,
+                        onValueChange = { onIntent(ProxyEditIntent.SetPrivateKey(it)) },
+                        label = { Text("Private Key PEM (optional)") },
+                        minLines = 3,
+                        maxLines = 5,
+                        shape = ProxyFieldShape,
+                        colors = proxyFieldColors(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (state.privateKey.isNotBlank()) {
+                        OutlinedTextField(
+                            value = state.passphrase,
+                            onValueChange = { onIntent(ProxyEditIntent.SetPassphrase(it)) },
+                            label = { Text("Key Passphrase (optional)") },
+                            singleLine = true,
+                            shape = ProxyFieldShape,
+                            colors = proxyFieldColors(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
         }
     }
@@ -238,6 +323,8 @@ fun DropdownField(
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
+            shape = ProxyFieldShape,
+            colors = proxyFieldColors(),
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
@@ -245,11 +332,30 @@ fun DropdownField(
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            shape = RoundedCornerShape(14.dp),
+            containerColor = MaterialTheme.colorScheme.surface
         ) {
             options.forEach { option ->
+                val isSelected = selected == option
                 DropdownMenuItem(
-                    text = { Text(option.ifEmpty { "(none)" }) },
+                    text = {
+                        Text(
+                            text = option.ifEmpty { "(none)" },
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    trailingIcon = if (isSelected) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    } else null,
                     onClick = {
                         onSelected(option)
                         expanded = false
@@ -273,6 +379,8 @@ fun PasswordField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(stringResource(R.string.proxy_field_password)) },
+        shape = ProxyFieldShape,
+        colors = proxyFieldColors(),
         isError = error != null,
         supportingText = error?.let { { Text(it) } },
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -301,6 +409,8 @@ fun UuidField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(stringResource(R.string.proxy_field_uuid)) },
+        shape = ProxyFieldShape,
+        colors = proxyFieldColors(),
         isError = error != null,
         supportingText = error?.let { { Text(it) } },
         trailingIcon = {

@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+      - 'beta-*'
+      - 'pre-*'
+      - 'nightly*'
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -42,16 +45,8 @@ jobs:
           ruby-version: '3.2'
           bundler-cache: true
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/wrapper
-            ~/.gradle/caches
-            ~/.gradle/daemon
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       # Signing
       - name: Decode keystore
@@ -75,33 +70,49 @@ jobs:
         run: chmod +x gradlew
 
       - name: Unit tests
-        run: ./gradlew :app:testFdroidDebugUnitTest :app:testStoreDebugUnitTest
+        run: |
+          ./gradlew :app:testFdroidDebugUnitTest
+          ./gradlew :app:testStoreDebugUnitTest
+          ./gradlew :app:testGithubDebugUnitTest
 
       - name: Lint
-        run: ./gradlew :app:lintFdroidRelease :app:lintStoreRelease
+        run: ./gradlew :app:lintFdroidRelease :app:lintStoreRelease :app:lintGithubRelease
 
       - name: Build APK
         run: bundle exec fastlane build_release
 
+      - name: Build Store AAB
+        run: ./gradlew :app:bundleStoreRelease :blockadstv:bundleStoreRelease
+
       # Artifacts
-      - name: Upload release APK
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-build
           path: |
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/github/release/*.apk
             blockadstv/build/outputs/apk/release/*.apk
+            blockadstv/build/outputs/apk/github/release/*.apk
+            app/build/outputs/bundle/storeRelease/*.aab
+            blockadstv/build/outputs/bundle/storeRelease/*.aab
           retention-days: 30
 
-      # Upload assets to existing GitHub Release (or create if missing)
+      # Upload assets to existing GitHub Release (or create if missing).
+      # Tags without a leading 'v' (beta-*, pre-*) are marked as pre-release so
+      # F-Droid's ^v.* tag check and GitHub /releases/latest ignore them.
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
           name: ${{ env.VERSION_NAME }}
           draft: false
-          prerelease: false
+          prerelease: ${{ !startsWith(github.ref_name, 'v') }}
           files: |
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/apk/github/release/*.apk
             blockadstv/build/outputs/apk/release/*.apk
+            blockadstv/build/outputs/apk/github/release/*.apk
+            app/build/outputs/bundle/storeRelease/*.aab
+            blockadstv/build/outputs/bundle/storeRelease/*.aab
           token: ${{ secrets.GITHUB_TOKEN }}

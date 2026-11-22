@@ -3,6 +3,7 @@ package app.pwhs.blockads
 import android.app.Application
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.di.appModule
+import app.pwhs.blockads.update.updateModule
 import app.pwhs.blockads.worker.DailySummaryScheduler
 import app.pwhs.blockads.worker.FilterUpdateScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -21,14 +22,16 @@ import app.pwhs.blockads.utils.FileLoggingTree
 
 
 class BlockAdsApplication : Application() {
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // Run startup DataStore migrations and scheduling off the main looper so Activity
+    // attachBaseContext never deadlocks waiting on a Main-bound DataStore edit transform.
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         startKoin {
             androidLogger()
             androidContext(this@BlockAdsApplication)
-            modules(appModule)
+            modules(appModule, updateModule)
         }
 
         if (BuildConfig.DEBUG) {
@@ -37,6 +40,7 @@ class BlockAdsApplication : Application() {
         
         // Plant File logging tree for all builds to allow log export
         Timber.plant(FileLoggingTree(this))
+        app.pwhs.blockads.data.logging.HttpDebugLogStore.init(this)
 
         // Schedule auto-update for filter lists after Koin is initialized
         val appPreferences: AppPreferences by inject()
@@ -53,6 +57,10 @@ class BlockAdsApplication : Application() {
             app.pwhs.blockads.worker.ConfigUpdateScheduler.scheduleConfigUpdate(this@BlockAdsApplication, appPreferences)
             app.pwhs.blockads.ui.browser.rules.BrowserRuleUpdateWorker.schedule(this@BlockAdsApplication)
             app.pwhs.blockads.worker.GeoIpUpdateWorker.schedule(this@BlockAdsApplication)
+            app.pwhs.blockads.worker.LogCleanupWorker.syncSchedule(
+                this@BlockAdsApplication,
+                appPreferences.logRetentionDays.first()
+            )
 
             // Schedule daily summary only if enabled
             if (appPreferences.dailySummaryEnabled.first()) {

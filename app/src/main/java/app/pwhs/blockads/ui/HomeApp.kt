@@ -2,38 +2,32 @@ package app.pwhs.blockads.ui
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
@@ -41,11 +35,15 @@ import androidx.navigation3.ui.NavDisplay
 import app.pwhs.blockads.BuildConfig
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.ui.about.AboutScreen
-import app.pwhs.blockads.ui.appearance.AppearanceScreen
+import app.pwhs.blockads.ui.appearance.AppearanceLanguageScreen
+import app.pwhs.blockads.ui.appearance.AppearanceNavigationScreen
+import app.pwhs.blockads.ui.appearance.AppearanceThemeScreen
 import app.pwhs.blockads.ui.appmanagement.AppManagementScreen
 import app.pwhs.blockads.ui.data.AboutKey
 import app.pwhs.blockads.ui.data.AppManagementKey
-import app.pwhs.blockads.ui.data.AppearanceKey
+import app.pwhs.blockads.ui.data.AppearanceLanguageKey
+import app.pwhs.blockads.ui.data.AppearanceNavigationKey
+import app.pwhs.blockads.ui.data.AppearanceThemeKey
 import app.pwhs.blockads.ui.browser.BrowserActivity
 import app.pwhs.blockads.ui.browser.BrowserScreen
 import app.pwhs.blockads.ui.browser.elementrules.ElementRulesScreen
@@ -55,10 +53,14 @@ import app.pwhs.blockads.ui.data.ElementRulesKey
 import app.pwhs.blockads.ui.data.DnsProviderKey
 import app.pwhs.blockads.ui.data.DomainRulesKey
 import app.pwhs.blockads.ui.data.FilterDetailKey
+import app.pwhs.blockads.ui.data.FilterOverlapKey
 import app.pwhs.blockads.ui.data.FilterKey
 import app.pwhs.blockads.ui.data.FireWallKey
 import app.pwhs.blockads.ui.data.HomeKey
+import app.pwhs.blockads.ui.data.HttpsDebugLogsKey
 import app.pwhs.blockads.ui.data.HttpsFilteringKey
+import app.pwhs.blockads.ui.data.HttpsSettingsKey
+import app.pwhs.blockads.ui.data.HttpsSkippedDomainsKey
 import app.pwhs.blockads.ui.data.CertInstallationWizardKey
 import app.pwhs.blockads.ui.data.GeoIpKey
 import app.pwhs.blockads.ui.httpsfiltering.wizard.CertInstallationWizardScreen
@@ -79,16 +81,31 @@ import app.pwhs.blockads.ui.dnsprovider.DnsProviderScreen
 import app.pwhs.blockads.ui.domainrules.DomainRulesScreen
 import app.pwhs.blockads.ui.filter.FilterSetupScreen
 import app.pwhs.blockads.ui.filter.detail.FilterDetailScreen
+import app.pwhs.blockads.ui.filter.overlap.FilterOverlapScreen
 import app.pwhs.blockads.ui.firewall.FirewallScreen
+import app.pwhs.blockads.ui.component.BlockAdsNavigationBar
+import app.pwhs.blockads.ui.component.BlockAdsNavigationRail
+import app.pwhs.blockads.ui.component.LocalFloatingBottomBarPadding
+import app.pwhs.blockads.ui.component.rememberIsExpandedLayout
 import app.pwhs.blockads.ui.home.HomeScreen
+import app.pwhs.blockads.ui.home.component.FeatureBadgeKind
 import app.pwhs.blockads.ui.home.component.HomeFeatureTipType
+import app.pwhs.blockads.ui.httpsfiltering.HttpsDebugLogsScreen
 import app.pwhs.blockads.ui.httpsfiltering.HttpsFilteringScreen
+import app.pwhs.blockads.ui.httpsfiltering.HttpsFilteringSettingsScreen
+import app.pwhs.blockads.ui.httpsfiltering.HttpsSkippedDomainsScreen
 import app.pwhs.blockads.ui.logs.LogsScreen
+import app.pwhs.blockads.ui.settings.SettingsDetailPane
 import app.pwhs.blockads.ui.settings.SettingsScreen
 import app.pwhs.blockads.ui.statistics.StatisticsScreen
 import app.pwhs.blockads.ui.wireguard.WireGuardEditScreen
 import app.pwhs.blockads.ui.proxyvpn.ProxyVpnScreen
+import app.pwhs.blockads.ui.update.AppUpdateDialog
+import app.pwhs.blockads.ui.update.findActivity
 import app.pwhs.blockads.ui.vpnsettings.VpnSettingsScreen
+import app.pwhs.blockads.update.AppUpdateController
+import app.pwhs.blockads.update.UpdateChannel
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
@@ -99,6 +116,21 @@ fun HomeApp(
 ) {
     val context = LocalContext.current
     val appPrefs: AppPreferences = koinInject()
+    val updateController: AppUpdateController = koinInject()
+    val updateState by updateController.state.collectAsStateWithLifecycle()
+    val updateScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        if (updateController.supportsInAppUpdate) {
+            val savedChannel = appPrefs.getUpdateChannelSnapshot()
+            val channel = if (savedChannel != null) {
+                UpdateChannel.fromId(savedChannel)
+            } else {
+                UpdateChannel.fromVersionName(BuildConfig.VERSION_NAME)
+            }
+            updateController.checkForUpdate(channel = channel, manual = false)
+        }
+    }
     val showBottomNavLabels by appPrefs.showBottomNavLabels.collectAsStateWithLifecycle(
         initialValue = true,
     )
@@ -107,6 +139,12 @@ fun HomeApp(
     )
     val secondaryTab by appPrefs.bottomNavSecondaryTab.collectAsStateWithLifecycle(
         initialValue = AppPreferences.BOTTOM_NAV_TAB_AUTO,
+    )
+    val navRailPosition by appPrefs.navRailPosition.collectAsStateWithLifecycle(
+        initialValue = AppPreferences.NAV_POSITION_LEFT,
+    )
+    val floatingCapsuleNav by appPrefs.floatingCapsuleNav.collectAsStateWithLifecycle(
+        initialValue = false,
     )
     val homeStack = rememberNavBackStack(HomeKey)
     val filterStack = rememberNavBackStack(FilterKey)
@@ -136,88 +174,72 @@ fun HomeApp(
         showBottomBar = stack.size <= 1
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = {
-            if (!showBottomBar) return@Scaffold
-            CompositionLocalProvider(
-                LocalDensity provides Density(
-                    density = LocalDensity.current.density,
-                    fontScale = 1f
-                )
-            ) {
-                NavigationBar(
-                    windowInsets = WindowInsets.navigationBars,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                ) {
-                    bottomBarScreens.forEach { screen ->
-                        NavigationBarItem(
-                            selected = currentBackStack == when (screen) {
-                                BottomBarScreen.Home -> homeStack
-                                BottomBarScreen.FilterSetup -> filterStack
-                                BottomBarScreen.Proxy -> wireguardStack
-                                BottomBarScreen.Firewall -> firewallStack
-                                BottomBarScreen.DomainRule -> domainRuleStack
-                                BottomBarScreen.Settings -> settingsStack
-                            },
-                            onClick = {
-                                currentTab = screen
-                            },
-                            icon = {
-                                if (screen == BottomBarScreen.Firewall && firewallEnabled) {
-                                    app.pwhs.blockads.ui.component.BurningFireIcon(
-                                        contentDescription = stringResource(screen.labelRes)
-                                    )
-                                } else {
-                                    Icon(
-                                        painter = painterResource(screen.icon),
-                                        contentDescription = stringResource(screen.labelRes),
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            },
-                            label = if (showBottomNavLabels) {
-                                {
-                                    Text(
-                                        text = stringResource(screen.labelRes),
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = LocalTextStyle.current.copy(
-                                            fontSize = 10.5.sp,
-                                            letterSpacing = (-0.2).sp
-                                        )
-                                    )
-                                }
-                            } else null,
-                            alwaysShowLabel = showBottomNavLabels,
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                            )
-                        )
+    var pendingSettingsPane by remember { mutableStateOf<SettingsDetailPane?>(null) }
+    var pendingFilterId by remember { mutableStateOf<Long?>(null) }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isWideScreen = rememberIsExpandedLayout(maxWidth)
+        val useNavRail = isWideScreen && navRailPosition != AppPreferences.NAV_POSITION_BOTTOM
+
+        // When unfolding from a single-pane detail screen into two-pane mode,
+        // collapse the backstack to the list root and open that item in the detail pane.
+        val settingsTopKey = settingsStack.lastOrNull()
+        LaunchedEffect(isWideScreen, settingsTopKey) {
+            if (isWideScreen && settingsStack.size > 1) {
+                val mappedPane = when (settingsTopKey) {
+                    is AboutKey -> SettingsDetailPane.ABOUT
+                    is AppearanceThemeKey -> SettingsDetailPane.APPEARANCE_THEME
+                    is AppearanceNavigationKey -> SettingsDetailPane.APPEARANCE_NAVIGATION
+                    is AppearanceLanguageKey -> SettingsDetailPane.APPEARANCE_LANGUAGE
+                    is AppManagementKey -> SettingsDetailPane.APP_MANAGEMENT
+                    is TrustedNetworksKey -> SettingsDetailPane.TRUSTED_NETWORKS
+                    is TailscaleKey -> SettingsDetailPane.TAILSCALE
+                    is HttpsFilteringKey -> SettingsDetailPane.HTTPS_FILTERING
+                    is HttpsDebugLogsKey -> SettingsDetailPane.HTTPS_DEBUG_LOGS
+                    is HttpsSettingsKey -> SettingsDetailPane.HTTPS_SETTINGS
+                    is HttpsSkippedDomainsKey -> SettingsDetailPane.HTTPS_SKIPPED_DOMAINS
+                    is DnsProviderKey -> SettingsDetailPane.DNS_PROVIDER
+                    is GeoIpKey -> SettingsDetailPane.GEO_IP
+                    else -> null
+                }
+                if (mappedPane != null) {
+                    pendingSettingsPane = mappedPane
+                    while (settingsStack.size > 1) {
+                        settingsStack.removeLastOrNull()
+                    }
+                    if (currentTab == BottomBarScreen.Settings) {
+                        showBottomBar = true
                     }
                 }
             }
         }
-    ) { innerPadding ->
+
+        val filterTopKey = filterStack.lastOrNull()
+        LaunchedEffect(isWideScreen, filterTopKey) {
+            if (isWideScreen && filterStack.size > 1 && filterTopKey is FilterDetailKey) {
+                pendingFilterId = filterTopKey.filterId
+                while (filterStack.size > 1) {
+                    filterStack.removeLastOrNull()
+                }
+                if (currentTab == BottomBarScreen.FilterSetup) {
+                    showBottomBar = true
+                }
+            }
+        }
+
         // When on a non-Home tab root, back should switch to Home tab instead of exiting
         BackHandler(enabled = currentTab != BottomBarScreen.Home && currentBackStack.size <= 1) {
             currentTab = BottomBarScreen.Home
             showBottomBar = true
         }
 
-        NavDisplay(
-            backStack = currentBackStack,
-            onBack = {
-                safePop(currentBackStack)
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(bottom = innerPadding.calculateBottomPadding())
-                .consumeWindowInsets(PaddingValues(bottom = innerPadding.calculateBottomPadding())),
+        val renderNavDisplay: @Composable (Modifier) -> Unit = { navModifier ->
+            NavDisplay(
+                backStack = currentBackStack,
+                onBack = {
+                    safePop(currentBackStack)
+                },
+                modifier = navModifier,
             entryProvider = entryProvider {
                 entry<HomeKey> {
                     HomeScreen(
@@ -238,6 +260,14 @@ fun HomeApp(
                         onNavigateToBrowser = { url ->
                             context.startActivity(BrowserActivity.createIntent(context, url))
                         },
+                        onNavigateToDomainRules = {
+                            showBottomBar = false
+                            homeStack.add(DomainRulesKey)
+                        },
+                        onNavigateToProxyVpn = {
+                            showBottomBar = false
+                            homeStack.add(ProxyVpnKey)
+                        },
                         onNavigateToFeature = { featureType ->
                             showBottomBar = false
                             when (featureType) {
@@ -245,6 +275,31 @@ fun HomeApp(
                                 HomeFeatureTipType.TRUSTED_NETWORKS -> homeStack.add(TrustedNetworksKey)
                                 HomeFeatureTipType.HTTPS_FILTERING -> homeStack.add(HttpsFilteringKey)
                                 HomeFeatureTipType.WIREGUARD -> homeStack.add(WireGuardImportKey)
+                            }
+                        },
+                        onFeatureBadgeClick = { kind ->
+                            when (kind) {
+                                FeatureBadgeKind.DNS_PROTOCOL -> {
+                                    showBottomBar = false
+                                    homeStack.add(DnsProviderKey)
+                                }
+                                FeatureBadgeKind.HTTPS_FILTER -> {
+                                    showBottomBar = false
+                                    homeStack.add(HttpsFilteringKey)
+                                }
+                                FeatureBadgeKind.TAILSCALE -> {
+                                    showBottomBar = false
+                                    homeStack.add(TailscaleKey)
+                                }
+                                FeatureBadgeKind.FIREWALL -> {
+                                    showBottomBar = true
+                                    currentTab = BottomBarScreen.Firewall
+                                }
+                                FeatureBadgeKind.FILTER_RULES -> {
+                                    showBottomBar = true
+                                    currentTab = BottomBarScreen.FilterSetup
+                                }
+                                FeatureBadgeKind.TUNNEL_MODE -> Unit
                             }
                         }
                     )
@@ -258,7 +313,13 @@ fun HomeApp(
                         onNavigateToFilterDetail = { filterId ->
                             showBottomBar = false
                             currentBackStack.add(FilterDetailKey(filterId))
-                        }
+                        },
+                        onNavigateToOverlap = {
+                            showBottomBar = false
+                            currentBackStack.add(FilterOverlapKey)
+                        },
+                        externalFilterId = pendingFilterId,
+                        onExternalFilterIdConsumed = { pendingFilterId = null }
                     )
                 }
                 entry<FireWallKey> {
@@ -273,9 +334,17 @@ fun HomeApp(
                             showBottomBar = false
                             settingsStack.add(AboutKey)
                         },
-                        onNavigateToAppearance = {
+                        onNavigateToTheme = {
                             showBottomBar = false
-                            settingsStack.add(AppearanceKey)
+                            settingsStack.add(AppearanceThemeKey)
+                        },
+                        onNavigateToNavigation = {
+                            showBottomBar = false
+                            settingsStack.add(AppearanceNavigationKey)
+                        },
+                        onNavigateToLanguage = {
+                            showBottomBar = false
+                            settingsStack.add(AppearanceLanguageKey)
                         },
                         onNavigateToAppManagement = {
                             showBottomBar = false
@@ -299,6 +368,18 @@ fun HomeApp(
                             showBottomBar = false
                             settingsStack.add(HttpsFilteringKey)
                         },
+                        onNavigateToCertWizard = {
+                            showBottomBar = false
+                            settingsStack.add(CertInstallationWizardKey)
+                        },
+                        onNavigateToHttpsDebugLogs = {
+                            showBottomBar = false
+                            settingsStack.add(HttpsDebugLogsKey)
+                        },
+                        onNavigateToHttpsSettings = {
+                            showBottomBar = false
+                            settingsStack.add(HttpsSettingsKey)
+                        },
                         onNavigateToDNSProvider = {
                             showBottomBar = false
                             settingsStack.add(DnsProviderKey)
@@ -310,7 +391,9 @@ fun HomeApp(
                         onNavigateToTailscale = {
                             showBottomBar = false
                             settingsStack.add(TailscaleKey)
-                        }
+                        },
+                        externalDetailPane = pendingSettingsPane,
+                        onExternalDetailPaneConsumed = { pendingSettingsPane = null }
                     )
                 }
                 entry<StatisticsKey> {
@@ -341,6 +424,13 @@ fun HomeApp(
                         }
                     )
                 }
+                entry<FilterOverlapKey> {
+                    FilterOverlapScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
+                    )
+                }
                 entry<AboutKey> {
                     AboutScreen(
                         onNavigateBack = {
@@ -348,8 +438,22 @@ fun HomeApp(
                         }
                     )
                 }
-                entry<AppearanceKey> {
-                    AppearanceScreen(
+                entry<AppearanceThemeKey> {
+                    AppearanceThemeScreen(
+                        onNavigateBack = {
+                            safePop(settingsStack)
+                        }
+                    )
+                }
+                entry<AppearanceNavigationKey> {
+                    AppearanceNavigationScreen(
+                        onNavigateBack = {
+                            safePop(settingsStack)
+                        }
+                    )
+                }
+                entry<AppearanceLanguageKey> {
+                    AppearanceLanguageScreen(
                         onNavigateBack = {
                             safePop(settingsStack)
                         }
@@ -445,6 +549,36 @@ fun HomeApp(
                         },
                         onNavigateToWizard = {
                             currentBackStack.add(CertInstallationWizardKey)
+                        },
+                        onNavigateToDebugLogs = {
+                            currentBackStack.add(HttpsDebugLogsKey)
+                        },
+                        onNavigateToSettings = {
+                            currentBackStack.add(HttpsSettingsKey)
+                        }
+                    )
+                }
+                entry<HttpsDebugLogsKey> {
+                    HttpsDebugLogsScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        }
+                    )
+                }
+                entry<HttpsSettingsKey> {
+                    HttpsFilteringSettingsScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
+                        },
+                        onNavigateToSkippedDomains = {
+                            currentBackStack.add(HttpsSkippedDomainsKey)
+                        }
+                    )
+                }
+                entry<HttpsSkippedDomainsKey> {
+                    HttpsSkippedDomainsScreen(
+                        onNavigateBack = {
+                            safePop(currentBackStack)
                         }
                     )
                 }
@@ -488,6 +622,109 @@ fun HomeApp(
                     )
                 }
             }
+            )
+        }
+
+        val isRightRail = navRailPosition == AppPreferences.NAV_POSITION_RIGHT
+        val showFloatingBottomOverlay = !useNavRail && floatingCapsuleNav && showBottomBar
+        val showDockedBottomBar = !useNavRail && !floatingCapsuleNav && showBottomBar
+        val floatingBottomPadding = if (showFloatingBottomOverlay) {
+            if (showBottomNavLabels) 88.dp else 80.dp
+        } else {
+            0.dp
+        }
+
+        CompositionLocalProvider(LocalFloatingBottomBarPadding provides floatingBottomPadding) {
+            Scaffold(
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                bottomBar = {
+                    if (showDockedBottomBar) {
+                        BlockAdsNavigationBar(
+                            screens = bottomBarScreens,
+                            currentTab = currentTab,
+                            firewallEnabled = firewallEnabled,
+                            showLabels = showBottomNavLabels,
+                            floatingCapsule = false,
+                            onSelectTab = { currentTab = it }
+                        )
+                    }
+                }
+            ) { innerPadding ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(bottom = innerPadding.calculateBottomPadding())
+                            .consumeWindowInsets(PaddingValues(bottom = innerPadding.calculateBottomPadding()))
+                    ) {
+                        if (useNavRail && !isRightRail && showBottomBar) {
+                            BlockAdsNavigationRail(
+                                screens = bottomBarScreens,
+                                currentTab = currentTab,
+                                firewallEnabled = firewallEnabled,
+                                showLabels = showBottomNavLabels,
+                                floatingCapsule = floatingCapsuleNav,
+                                onSelectTab = { currentTab = it }
+                            )
+                            if (!floatingCapsuleNav) {
+                                VerticalDivider(
+                                    modifier = Modifier.statusBarsPadding(),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                        }
+                        renderNavDisplay(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                        if (useNavRail && isRightRail && showBottomBar) {
+                            if (!floatingCapsuleNav) {
+                                VerticalDivider(
+                                    modifier = Modifier.statusBarsPadding(),
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                )
+                            }
+                            BlockAdsNavigationRail(
+                                screens = bottomBarScreens,
+                                currentTab = currentTab,
+                                firewallEnabled = firewallEnabled,
+                                showLabels = showBottomNavLabels,
+                                floatingCapsule = floatingCapsuleNav,
+                                onSelectTab = { currentTab = it }
+                            )
+                        }
+                    }
+
+                    if (showFloatingBottomOverlay) {
+                        Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                            BlockAdsNavigationBar(
+                                screens = bottomBarScreens,
+                                currentTab = currentTab,
+                                firewallEnabled = firewallEnabled,
+                                showLabels = showBottomNavLabels,
+                                floatingCapsule = true,
+                                onSelectTab = { currentTab = it }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (updateController.supportsInAppUpdate) {
+        AppUpdateDialog(
+            state = updateState,
+            onStartUpdate = {
+                val activity = context.findActivity() ?: return@AppUpdateDialog
+                updateScope.launch { updateController.startUpdate(activity) }
+            },
+            onCompleteUpdate = { updateController.completeUpdate() },
+            onDismiss = { skip ->
+                updateScope.launch { updateController.dismissUpdate(skip) }
+            },
         )
     }
 }

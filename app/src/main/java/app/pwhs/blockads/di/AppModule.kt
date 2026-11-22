@@ -10,6 +10,7 @@ import app.pwhs.blockads.data.repository.CustomFilterManager
 import app.pwhs.blockads.data.repository.FilterListRepository
 import app.pwhs.blockads.ui.dnsprovider.DnsProviderViewModel
 import app.pwhs.blockads.ui.filter.detail.FilterDetailViewModel
+import app.pwhs.blockads.ui.filter.overlap.FilterOverlapViewModel
 import app.pwhs.blockads.ui.filter.FilterSetupViewModel
 import app.pwhs.blockads.ui.home.HomeViewModel
 import app.pwhs.blockads.ui.logs.LogViewModel
@@ -87,6 +88,9 @@ val appModule = module {
     // Preferences
     single { AppPreferences(androidContext()) }
 
+    // Interactive firewall prompt
+    single { app.pwhs.blockads.service.FirewallPromptManager(androidContext(), get()) }
+
     // Repository
     single { FilterDownloadManager(androidContext(), get()) }
     single {
@@ -96,7 +100,8 @@ val appModule = module {
             whitelistDomainDao = get(),
             customDnsRuleDao = get(),
             client = get(),
-            downloadManager = get()
+            downloadManager = get(),
+            appPreferences = get()
         )
     }
     single { CustomFilterApi(get()) }
@@ -229,6 +234,13 @@ val appModule = module {
         FirewallViewModel(
             appPrefs = get(),
             firewallRuleDao = get(),
+            promptManager = get(),
+            application = androidApplication()
+        )
+    }
+    viewModel {
+        app.pwhs.blockads.ui.firewall.prompt.FirewallPromptViewModel(
+            promptManager = get(),
             application = androidApplication()
         )
     }
@@ -244,10 +256,17 @@ val appModule = module {
         )
     }
     viewModel {
+        FilterOverlapViewModel(
+            filterListDao = get(),
+            application = androidApplication()
+        )
+    }
+    viewModel {
         DomainRulesViewModel(
             whitelistDomainDao = get(),
             customDnsRuleDao = get(),
             filterRepo = get(),
+            appPrefs = get(),
             application = androidApplication()
         )
     }

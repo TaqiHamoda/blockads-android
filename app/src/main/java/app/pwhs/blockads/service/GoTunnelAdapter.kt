@@ -1,9 +1,6 @@
 package app.pwhs.blockads.service
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.os.Build
-import android.system.OsConstants
 import app.pwhs.blockads.R
 import app.pwhs.blockads.data.dao.DnsLogDao
 import app.pwhs.blockads.data.entities.DnsLogEntry
@@ -17,13 +14,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
-import tunnel.AppResolver
+import tunnel.AppDomainChecker
 import tunnel.DomainChecker
 import tunnel.FirewallChecker
 import tunnel.SocketProtector
-import tunnel.UIDResolver
-import java.net.InetAddress
-import java.net.InetSocketAddress
 
 /**
  * Bridge between Android VpnService and the Go DNS tunnel engine.
@@ -37,7 +31,7 @@ class GoTunnelAdapter(
     private val firewallManagerProvider: () -> FirewallManager?,
     private val recordLogProvider: () -> Boolean,
 ) {
-    private val engine = tunnel.Tunnel.newEngine()
+    internal val engine = tunnel.Tunnel.newEngine()
 
     init {
         TunnelRuleLoader.loadGeoIPDatabase(context, engine)
@@ -86,68 +80,24 @@ class GoTunnelAdapter(
             override fun getBlockReason(domain: String): String = filterRepo.getBlockReason(domain)
             override fun hasCustomRule(domain: String): Long = filterRepo.hasCustomRule(domain)
         })
-    }
-
-    private fun setupUidResolver() {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        if (cm == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-        engine.setUIDResolver(UIDResolver { protocol, localIP, localPort, remoteIP, remotePort ->
-            try {
-                val proto = when (protocol.toInt()) {
-                    6 -> OsConstants.IPPROTO_TCP
-                    17 -> OsConstants.IPPROTO_UDP
-                    else -> return@UIDResolver -1L
-                }
-                val local = InetSocketAddress(InetAddress.getByName(localIP), localPort.toInt())
-                val remote = InetSocketAddress(InetAddress.getByName(remoteIP), remotePort.toInt())
-                cm.getConnectionOwnerUid(proto, local, remote).toLong()
-            } catch (e: Exception) {
-                -1L
-            }
+        engine.setAppDomainChecker(AppDomainChecker { domain, appName ->
+            filterRepo.checkAppRule(domain, appName)
         })
     }
 
-    private fun setupAppUidResolver() {
-        engine.setAppUidResolver(tunnel.AppUidResolver { uid ->
-            try {
-                context.packageManager.getPackagesForUid(uid.toInt())?.firstOrNull() ?: ""
-            } catch (e: Exception) {
-                ""
-            }
-        })
-    }
+    private fun setupUidResolver() = GoTunnelResolvers.setupUidResolver(context, engine)
 
-    /**
-     * Set up the app resolver to get the AppName for every DNS query (used for logging).
-     * Uses [AppNameResolver] to map source port → UID → app name.
-     */
-    private fun setupAppResolver() {
-        engine.setAppResolver(AppResolver { sourcePort, sourceIP, destIP, destPort ->
-            try {
-                val identity = appNameResolver.resolveIdentity(
-                    sourcePort.toInt(), sourceIP, destIP, destPort.toInt()
-                )
-                // Prefer packageName so the LogCallback can resolve a real
-                // app label. For system UIDs (netd 1052, dns_resolver, …)
-                // there is no package — fall back to the friendly appName
-                // so Go doesn't keep its "RootProxy" default.
-                when {
-                    identity.packageName.isNotEmpty() -> identity.packageName
-                    identity.appName.isNotEmpty() -> identity.appName
-                    else -> ""
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "App resolve failed")
-                ""
-            }
-        })
-    }
+    private fun setupAppUidResolver() = GoTunnelResolvers.setupAppUidResolver(context, engine)
+
+    private fun setupAppResolver() = GoTunnelResolvers.setupAppResolver(engine, appNameResolver)
 
     /**
      * Set up the firewall checker for per-app DNS blocking.
      * Receives the already resolved appName from Go, and checks [FirewallManager.shouldBlock].
      */
     private fun setupFirewallChecker() {
+        val initialFwManager = firewallManagerProvider()
+        engine.setFirewallEnabled(initialFwManager != null && initialFwManager.hasActiveRules())
         engine.setFirewallChecker(FirewallChecker { appName ->
             val fwManager = firewallManagerProvider() ?: return@FirewallChecker false
             try {
@@ -172,6 +122,14 @@ class GoTunnelAdapter(
      */
     fun setConnLogEnabled(enabled: Boolean) {
         engine.setConnLogEnabled(enabled)
+    }
+
+    fun setSniProxyRules(rulesJson: String) {
+        try {
+            engine.setSniProxyRules(rulesJson)
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to update SNI proxy rules")
+        }
     }
 
     fun setBlockDohBypass(enabled: Boolean) {
@@ -207,7 +165,7 @@ class GoTunnelAdapter(
         val ownAppName = runCatching {
             val pm = context.packageManager
             pm.getApplicationLabel(context.applicationInfo).toString()
-        }.getOrDefault("BlockAds")
+        }.getOrDefault(context.getString(app.pwhs.blockads.R.string.app_name))
 
         engine.setLogCallback { domain, blocked, queryType, responseTimeMs, packageNameOrAppName, resolvedIP, blockedBy ->
             if (!recordLogProvider()) return@setLogCallback
@@ -215,31 +173,11 @@ class GoTunnelAdapter(
 
             scope.launch(Dispatchers.IO) {
                 try {
-                    val (friendlyAppName, cleanPackageName) = when {
-                        packageNameOrAppName == "uid:0" || packageNameOrAppName.equals("unknown", ignoreCase = true) -> {
-                            context.getString(R.string.log_unknown_app) to ""
-                        }
-                        packageNameOrAppName.startsWith("uid:") -> {
-                            val uid = packageNameOrAppName.removePrefix("uid:").toIntOrNull()
-                            if (uid != null) {
-                                val pkg = appNameResolver.getPackageNameForUid(uid)
-                                val name = appNameResolver.getAppNameForUid(uid)
-                                (if (name.isNotEmpty() && name != "uid:$uid") name else context.getString(R.string.log_unknown_app)) to pkg
-                            } else {
-                                context.getString(R.string.log_unknown_app) to ""
-                            }
-                        }
-                        packageNameOrAppName.contains(".") -> {
-                            val label = runCatching {
-                                val pm = context.packageManager
-                                pm.getApplicationLabel(pm.getApplicationInfo(packageNameOrAppName, 0)).toString()
-                            }.getOrDefault(packageNameOrAppName)
-                            label to packageNameOrAppName
-                        }
-                        else -> {
-                            packageNameOrAppName to ""
-                        }
-                    }
+                    val (friendlyAppName, cleanPackageName) = DnsLogMapper.resolveAppIdentity(
+                        packageNameOrAppName,
+                        context,
+                        appNameResolver
+                    )
 
                     val resolvedDomain = IpDomainResolver.resolve(domain, resolvedIP)
                     IpDomainResolver.remember(domain, resolvedIP)
@@ -248,7 +186,7 @@ class GoTunnelAdapter(
                     val effectiveQueryType = if (isConnection) {
                         if (domain.startsWith("UDP ", ignoreCase = true)) "UDP" else "TCP"
                     } else {
-                        dnsQueryTypeToString(queryType.toInt())
+                        DnsLogMapper.dnsQueryTypeToString(queryType.toInt())
                     }
                     val entry = DnsLogEntry(
                         domain = resolvedDomain,
@@ -267,6 +205,19 @@ class GoTunnelAdapter(
                     Timber.e(e, "Error logging DNS query for $domain")
                 }
             }
+        }
+
+        engine.setMitmLogCallback { action, rule, method, resourceType, initiator, url, detail ->
+            val logAction = when (action) {
+                "BLOCKED" -> app.pwhs.blockads.data.logging.HttpLogAction.BLOCKED
+                "SURROGATE" -> app.pwhs.blockads.data.logging.HttpLogAction.SURROGATE
+                "SCRIPTLET" -> app.pwhs.blockads.data.logging.HttpLogAction.SCRIPTLET
+                else -> app.pwhs.blockads.data.logging.HttpLogAction.ALLOWED
+            }
+            app.pwhs.blockads.data.logging.HttpDebugLogStore.record(
+                source = "HTTPS", action = logAction, rule = rule, method = method,
+                resourceType = resourceType, initiator = initiator, url = url, detail = detail
+            )
         }
     }
 
@@ -321,6 +272,8 @@ class GoTunnelAdapter(
             } catch (e: Exception) {
                 Timber.e(e, "Failed to init stack MITM on VPN boot")
             }
+        } else {
+            engine.stopStackMitm()
         }
 
         setupAppResolver()
@@ -434,6 +387,10 @@ class GoTunnelAdapter(
         TunnelRuleLoader.updateCosmeticRules(context, engine, filterRepo)
     }
 
+    fun reloadExtraPassthrough() {
+        TunnelRuleLoader.loadExtraPassthrough(context, engine)
+    }
+
     fun getStats(): String = engine.stats
 
     fun setRulesetConfig(content: String): Long = runCatching {
@@ -447,6 +404,17 @@ class GoTunnelAdapter(
 
     fun configureTailscale(state: String, url: String, key: String): String =
         runCatching { engine.configureTailscale(state, url, key) }.getOrDefault("{}")
+
+    fun setTailscaleTaildropReceiver(receiver: tunnel.TaildropReceiver) {
+        runCatching { engine.setTailscaleTaildropReceiver(receiver) }
+    }
+
+    fun setTailscaleTaildropDir(dir: String) {
+        runCatching { engine.setTailscaleTaildropDir(dir) }
+    }
+
+    fun sendTailscaleFile(target: String, fileName: String, filePath: String): Result<Unit> =
+        runCatching { engine.sendTailscaleFile(target, fileName, filePath) }
 
     fun startTailscaleAuth(host: String): String =
         runCatching { engine.startTailscaleAuth(host) }.getOrDefault("")
@@ -469,12 +437,17 @@ class GoTunnelAdapter(
         runCatching { engine.setTailscaleExitNode(id) }
     }
 
+    fun setTailscaleAdvertiseExitNode(enabled: Boolean) {
+        runCatching { engine.setTailscaleAdvertiseExitNode(enabled) }
+    }
+
+    fun setTailscaleAdBlockEnabled(enabled: Boolean) {
+        runCatching { engine.setTailscaleAdBlockEnabled(enabled) }
+    }
+
+    fun pingTailscalePeer(target: String): String =
+        runCatching { engine.pingTailscalePeer(target) }.getOrDefault("""{"error":"Ping failed"}""")
+
     fun isTailscaleActive(): Boolean =
         runCatching { engine.isTailscaleActive }.getOrDefault(false)
-
-    companion object {
-        private fun dnsQueryTypeToString(type: Int): String = when (type) {
-            1 -> "A"; 28 -> "AAAA"; 5 -> "CNAME"; else -> "OTHER"
-        }
-    }
 }

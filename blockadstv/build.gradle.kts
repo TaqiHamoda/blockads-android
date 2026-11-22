@@ -30,11 +30,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.pwhs.blockadstv"
+        applicationId = "app.pwhs.blockads"
         minSdk = 24
         targetSdk = 36
-        versionCode = 58
-        versionName = "7.1.1"
+        versionCode = 2008
+        versionName = "7.2.0"
     }
 
     flavorDimensions += "distribution"
@@ -42,10 +42,24 @@ android {
         create("fdroid") {
             dimension = "distribution"
             buildConfigField("Boolean", "IS_STORE", "false")
+            buildConfigField("String", "UPDATE_MODE", "\"none\"")
+            buildConfigField("Long", "BUILD_TIME_MS", "0L")
         }
         create("store") {
             dimension = "distribution"
             buildConfigField("Boolean", "IS_STORE", "true")
+            buildConfigField("String", "UPDATE_MODE", "\"play\"")
+            buildConfigField("Long", "BUILD_TIME_MS", "0L")
+        }
+        create("github") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "IS_STORE", "false")
+            buildConfigField("String", "UPDATE_MODE", "\"github\"")
+            val buildTimeMs = providers.environmentVariable("SOURCE_DATE_EPOCH")
+                .map { it.toLong() * 1000L }
+                .orElse(System.currentTimeMillis())
+                .get()
+            buildConfigField("Long", "BUILD_TIME_MS", "${buildTimeMs}L")
         }
     }
 
@@ -88,6 +102,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    val isBuildingBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
+
+    splits {
+        abi {
+            isEnable = !isBuildingBundle
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            isUniversalApk = true
+        }
     }
 }
 
@@ -177,6 +202,10 @@ dependencies {
     // libsu — root shell access for iptables mode
     implementation(libs.core)
     implementation(libs.service)
+
+    // Google Play In-App Update (store flavor only)
+    "storeImplementation"(libs.play.app.update)
+    "storeImplementation"(libs.play.app.update.ktx)
 
     // Testing
     androidTestImplementation(platform(libs.androidx.compose.bom))

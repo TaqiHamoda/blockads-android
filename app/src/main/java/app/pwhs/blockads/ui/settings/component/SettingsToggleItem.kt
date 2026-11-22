@@ -72,6 +72,8 @@ fun SettingsToggleItem(
             }
         }
 
+        Spacer(modifier = Modifier.width(12.dp))
+
         Switch(
             checked = isChecked,
             onCheckedChange = null,

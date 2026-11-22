@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">BlockAds TV</string>
+    <string name="app_name" translatable="false">BlockAds TV</string>
     <string name="nav_home">Home</string>
     <string name="nav_filters">Filters</string>
     <string name="nav_rules">Rules</string>
@@ -68,6 +68,7 @@
     <string name="settings_lang_it" translatable="false">Italiano</string>
     <string name="settings_lang_ar" translatable="false">العربية</string>
     <string name="settings_lang_tr" translatable="false">Türkçe</string>
+    <string name="settings_lang_hu" translatable="false">Magyar</string>
     <string name="settings_lang_pl" translatable="false">Polski</string>
     <string name="settings_lang_in" translatable="false">Bahasa Indonesia</string>
     <string name="settings_lang_pt_br" translatable="false">Português (Brasil)</string>
@@ -110,4 +111,23 @@
     <string name="proxy_err_invalid_link">Invalid proxy link or unsupported protocol</string>
     <string name="proxy_subscription_success">Imported %1$d nodes</string>
     <string name="settings_mode_title">Protection Mode</string>
+    <string name="update_section_title">App Updates</string>
+    <string name="update_check_title">Check for updates</string>
+    <string name="update_check_desc">Check if a newer version is available</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_up_to_date">You are on the latest version</string>
+    <string name="update_channel_title">Update channel</string>
+    <string name="update_channel_stable">Stable</string>
+    <string name="update_channel_beta">Beta</string>
+    <string name="update_channel_nightly">Nightly</string>
+    <string name="update_available_title">Update Available (%1$s)</string>
+    <string name="update_available_default_notes">A new version of BlockAds TV is ready to install.</string>
+    <string name="update_action_now">Update Now</string>
+    <string name="update_action_later">Later</string>
+    <string name="update_action_skip">Skip this version</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_ready_install">Update ready to install</string>
+    <string name="update_action_install">Install</string>
+    <string name="update_action_restart">Restart to Update</string>
+    <string name="update_error_prefix">Update error: %1$s</string>
 </resources>

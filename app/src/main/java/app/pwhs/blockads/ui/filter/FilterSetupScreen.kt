@@ -1,9 +1,13 @@
 package app.pwhs.blockads.ui.filter
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,29 +24,39 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.pwhs.blockads.BuildConfig
 import app.pwhs.blockads.R
+import app.pwhs.blockads.ui.component.LocalFloatingBottomBarPadding
+import app.pwhs.blockads.ui.component.rememberIsExpandedLayout
 import app.pwhs.blockads.data.datastore.AppPreferences
 import app.pwhs.blockads.data.entities.FilterList as FilterListEntity
+import app.pwhs.blockads.ui.component.UndoSnackbarHost
 import app.pwhs.blockads.ui.event.UiEventEffect
 import app.pwhs.blockads.ui.filter.component.AddFilterBottomSheet
 import app.pwhs.blockads.ui.filter.component.CustomTabContent
 import app.pwhs.blockads.ui.filter.component.filterListItems
+import app.pwhs.blockads.ui.filter.detail.FilterDetailScreen
 import app.pwhs.blockads.ui.filter.component.FilterSearchBar
 import app.pwhs.blockads.ui.filter.component.FilterTabRow
 import app.pwhs.blockads.ui.filter.component.FilterTagChipRow
@@ -63,7 +77,10 @@ fun FilterSetupScreen(
     canNavigateBack: Boolean = false,
     onNavigateBack: () -> Unit = {},
     viewModel: FilterSetupViewModel = koinViewModel(),
-    onNavigateToFilterDetail: (filterId: Long) -> Unit = {}
+    onNavigateToFilterDetail: (filterId: Long) -> Unit = {},
+    onNavigateToOverlap: () -> Unit = {},
+    externalFilterId: Long? = null,
+    onExternalFilterIdConsumed: () -> Unit = {},
 ) {
     val allLists by viewModel.filterLists.collectAsStateWithLifecycle()
     val filterLists by viewModel.filteredFilterLists.collectAsStateWithLifecycle()
@@ -75,6 +92,7 @@ fun FilterSetupScreen(
     val supportErrorInfo by viewModel.supportErrorInfo.collectAsStateWithLifecycle()
     val customFilterTags by viewModel.customFilterTags.collectAsStateWithLifecycle()
     val selectedTag by viewModel.selectedTag.collectAsStateWithLifecycle()
+    val useDefaultFilters by viewModel.useDefaultFiltersInStore.collectAsStateWithLifecycle()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var filterToEdit by remember { mutableStateOf<FilterListEntity?>(null) }
@@ -82,7 +100,7 @@ fun FilterSetupScreen(
     var tagToDelete by remember { mutableStateOf<String?>(null) }
     var isSearchVisible by remember { mutableStateOf(false) }
 
-    val isStore = BuildConfig.IS_STORE
+    val isStore = BuildConfig.IS_STORE && !useDefaultFilters
     val categories = remember(isStore) {
         if (isStore) {
             listOf(FilterCategoryTab.CUSTOM)
@@ -92,9 +110,41 @@ fun FilterSetupScreen(
     }
 
     val pagerState = rememberPagerState(initialPage = 0) { categories.size }
+    LaunchedEffect(categories.size) {
+        if (pagerState.currentPage >= categories.size) {
+            pagerState.scrollToPage(0)
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val resources = LocalContext.current.resources
 
     UiEventEffect(viewModel.events)
+
+    LaunchedEffect(viewModel) {
+        viewModel.undoDeleteEvent.collect { filter ->
+            snackbarHostState.currentSnackbarData?.dismiss()
+            var handled = false
+            try {
+                val result = snackbarHostState.showSnackbar(
+                    message = resources.getString(R.string.filter_list_removed_named, filter.name),
+                    actionLabel = resources.getString(R.string.action_undo),
+                    withDismissAction = true,
+                    duration = SnackbarDuration.Short
+                )
+                handled = true
+                if (result == SnackbarResult.ActionPerformed) {
+                    viewModel.cancelDeleteFilterList(filter)
+                } else {
+                    viewModel.commitDeleteFilterList(filter)
+                }
+            } finally {
+                if (!handled) {
+                    viewModel.commitDeleteFilterList(filter)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.filterAddedEvent.collect {
@@ -136,6 +186,7 @@ fun FilterSetupScreen(
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { UndoSnackbarHost(snackbarHostState) },
         topBar = {
             FilterTopBar(
                 title = if (isStore) stringResource(R.string.settings_category_filters) else stringResource(R.string.filter_setup_title),
@@ -146,9 +197,13 @@ fun FilterSetupScreen(
                 },
                 canNavigateBack = canNavigateBack,
                 onNavigateBack = onNavigateBack,
+                onOpenOverlap = onNavigateToOverlap,
                 isUpdatingFilter = isUpdatingFilter,
                 updateProgress = updateProgress,
-                onUpdateAllFilters = { viewModel.updateAllFilters() }
+                onUpdateAllFilters = { viewModel.updateAllFilters() },
+                showUseDefaultOption = BuildConfig.IS_STORE,
+                useDefaultFilters = useDefaultFilters,
+                onToggleUseDefaultFilters = { viewModel.setStoreUseDefaultFilters(!useDefaultFilters) }
             )
         }
     ) { innerPadding ->
@@ -163,16 +218,7 @@ fun FilterSetupScreen(
                 onSearchQueryChange = { viewModel.setSearchQuery(it) }
             )
 
-            if (isStore) {
-                FilterTagChipRow(
-                    tags = customFilterTags,
-                    selectedTag = selectedTag,
-                    onSelectTag = { viewModel.selectTag(it) },
-                    onCreateTagClick = { showCreateTagDialog = true },
-                    activeCounts = tagActiveCounts,
-                    onDeleteTag = { tagToDelete = it }
-                )
-            } else {
+            if (!isStore) {
                 FilterTabRow(
                     selectedTab = categories[pagerState.currentPage],
                     onTabSelected = { tab ->
@@ -213,27 +259,124 @@ fun FilterSetupScreen(
                 }
 
                 if (currentTab == FilterCategoryTab.CUSTOM) {
-                    if (isSearching && displayFilters.isEmpty()) {
-                        EmptyCategorySearch(searchQuery)
-                    } else if (isStore && selectedTag == TAG_STARRED && displayFilters.isEmpty()) {
-                        EmptyStarredFilter()
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp)
-                        ) {
-                            item {
-                                CustomTabContent(
-                                    customFilters = displayFilters,
-                                    onToggle = { viewModel.toggleFilterList(it) },
-                                    onDelete = { viewModel.deleteFilterList(it) },
-                                    onEdit = { filterToEdit = it },
-                                    onFilterClick = onNavigateToFilterDetail,
-                                    onShowAddDialog = { showAddDialog = true },
-                                    starredUrls = starredUrls,
-                                    onToggleStar = { viewModel.toggleStarredFilter(it) },
-                                    emptyText = if (selectedTag != null) stringResource(R.string.filter_tag_empty) else null
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val isExpanded = rememberIsExpandedLayout(maxWidth)
+                        if (isExpanded) {
+                            var selectedFilterId by rememberSaveable { mutableStateOf<Long?>(null) }
+                            LaunchedEffect(externalFilterId) {
+                                if (externalFilterId != null) {
+                                    selectedFilterId = externalFilterId
+                                    onExternalFilterIdConsumed()
+                                }
+                            }
+                            val activeFilterId = selectedFilterId
+                                ?.takeIf { id -> displayFilters.any { it.id == id } }
+                                ?: displayFilters.firstOrNull()?.id
+
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(0.46f)
+                                        .fillMaxHeight()
+                                ) {
+                                    if (isStore) {
+                                        FilterTagChipRow(
+                                            tags = customFilterTags,
+                                            selectedTag = selectedTag,
+                                            onSelectTag = { viewModel.selectTag(it) },
+                                            onCreateTagClick = { showCreateTagDialog = true },
+                                            activeCounts = tagActiveCounts,
+                                            onDeleteTag = { tagToDelete = it }
+                                        )
+                                    }
+                                    if (isSearching && displayFilters.isEmpty()) {
+                                        EmptyCategorySearch(searchQuery)
+                                    } else if (isStore && selectedTag == TAG_STARRED && displayFilters.isEmpty()) {
+                                        EmptyStarredFilter()
+                                    } else {
+                                        LazyColumn(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentPadding = PaddingValues(
+                                                start = 16.dp,
+                                                end = 12.dp,
+                                                top = 12.dp,
+                                                bottom = 24.dp + LocalFloatingBottomBarPadding.current
+                                            )
+                                        ) {
+                                            item {
+                                                CustomTabContent(
+                                                    customFilters = displayFilters,
+                                                    onToggle = { viewModel.toggleFilterList(it) },
+                                                    onDelete = { viewModel.requestDeleteFilterList(it) },
+                                                    onEdit = { filterToEdit = it },
+                                                    onFilterClick = { id -> selectedFilterId = id },
+                                                    onShowAddDialog = { showAddDialog = true },
+                                                    starredUrls = starredUrls,
+                                                    onToggleStar = { viewModel.toggleStarredFilter(it) },
+                                                    emptyText = if (selectedTag != null) stringResource(R.string.filter_tag_empty) else null
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                VerticalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                 )
+                                Box(
+                                    modifier = Modifier
+                                        .weight(0.54f)
+                                        .fillMaxHeight()
+                                ) {
+                                    if (activeFilterId != null) {
+                                        FilterDetailScreen(
+                                            filterId = activeFilterId,
+                                            showBackButton = false,
+                                            onNavigateBack = { selectedFilterId = null }
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                if (isStore) {
+                                    FilterTagChipRow(
+                                        tags = customFilterTags,
+                                        selectedTag = selectedTag,
+                                        onSelectTag = { viewModel.selectTag(it) },
+                                        onCreateTagClick = { showCreateTagDialog = true },
+                                        activeCounts = tagActiveCounts,
+                                        onDeleteTag = { tagToDelete = it }
+                                    )
+                                }
+                                if (isSearching && displayFilters.isEmpty()) {
+                                    EmptyCategorySearch(searchQuery)
+                                } else if (isStore && selectedTag == TAG_STARRED && displayFilters.isEmpty()) {
+                                    EmptyStarredFilter()
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(
+                                            start = 16.dp,
+                                            end = 16.dp,
+                                            top = 12.dp,
+                                            bottom = 24.dp + LocalFloatingBottomBarPadding.current
+                                        )
+                                    ) {
+                                        item {
+                                            CustomTabContent(
+                                                customFilters = displayFilters,
+                                                onToggle = { viewModel.toggleFilterList(it) },
+                                                onDelete = { viewModel.requestDeleteFilterList(it) },
+                                                onEdit = { filterToEdit = it },
+                                                onFilterClick = onNavigateToFilterDetail,
+                                                onShowAddDialog = { showAddDialog = true },
+                                                starredUrls = starredUrls,
+                                                onToggleStar = { viewModel.toggleStarredFilter(it) },
+                                                emptyText = if (selectedTag != null) stringResource(R.string.filter_tag_empty) else null
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -243,17 +386,77 @@ fun FilterSetupScreen(
                     if (isSearching && displayFilters.isEmpty()) {
                         EmptyCategorySearch(searchQuery)
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 24.dp)
-                        ) {
-                            filterListItems(
-                                filters = displayFilters,
-                                onToggle = { viewModel.toggleFilterList(it) },
-                                onFilterClick = onNavigateToFilterDetail,
-                                starredUrls = starredUrls,
-                                onToggleStar = { viewModel.toggleStarredFilter(it) }
-                            )
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            if (rememberIsExpandedLayout(maxWidth)) {
+                                var selectedFilterId by rememberSaveable { mutableStateOf<Long?>(null) }
+                                LaunchedEffect(externalFilterId) {
+                                    if (externalFilterId != null) {
+                                        selectedFilterId = externalFilterId
+                                        onExternalFilterIdConsumed()
+                                    }
+                                }
+                                val activeFilterId = selectedFilterId
+                                    ?.takeIf { id -> displayFilters.any { it.id == id } }
+                                    ?: displayFilters.firstOrNull()?.id
+
+                                Row(modifier = Modifier.fillMaxSize()) {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .weight(0.46f)
+                                            .fillMaxHeight(),
+                                        contentPadding = PaddingValues(
+                                            start = 16.dp,
+                                            end = 12.dp,
+                                            top = 16.dp,
+                                            bottom = 24.dp + LocalFloatingBottomBarPadding.current
+                                        )
+                                    ) {
+                                        filterListItems(
+                                            filters = displayFilters,
+                                            onToggle = { viewModel.toggleFilterList(it) },
+                                            onFilterClick = { id -> selectedFilterId = id },
+                                            starredUrls = starredUrls,
+                                            onToggleStar = { viewModel.toggleStarredFilter(it) }
+                                        )
+                                    }
+
+                                    VerticalDivider(
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(0.54f)
+                                            .fillMaxHeight()
+                                    ) {
+                                        if (activeFilterId != null) {
+                                            FilterDetailScreen(
+                                                filterId = activeFilterId,
+                                                showBackButton = false,
+                                                onNavigateBack = { selectedFilterId = null }
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(
+                                        start = 16.dp,
+                                        end = 16.dp,
+                                        top = 16.dp,
+                                        bottom = 24.dp + LocalFloatingBottomBarPadding.current
+                                    )
+                                ) {
+                                    filterListItems(
+                                        filters = displayFilters,
+                                        onToggle = { viewModel.toggleFilterList(it) },
+                                        onFilterClick = onNavigateToFilterDetail,
+                                        starredUrls = starredUrls,
+                                        onToggleStar = { viewModel.toggleStarredFilter(it) }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -262,6 +465,7 @@ fun FilterSetupScreen(
 
         val isAddingCustomFilter by viewModel.isAddingCustomFilter.collectAsStateWithLifecycle()
         val addFilterProgress by viewModel.addFilterProgress.collectAsStateWithLifecycle()
+        val addFilterProgressDetail by viewModel.addFilterProgressDetail.collectAsStateWithLifecycle()
         if (showAddDialog || filterToEdit != null) {
             AddFilterBottomSheet(
                 onDismiss = {
@@ -287,6 +491,7 @@ fun FilterSetupScreen(
                 existingUrls = filterLists.map { it.url },
                 isValidating = isAddingCustomFilter,
                 progress = addFilterProgress,
+                progressDetail = addFilterProgressDetail,
                 defaultBuildLocally = filterBuildMode == AppPreferences.BUILD_MODE_LOCAL
             )
         }

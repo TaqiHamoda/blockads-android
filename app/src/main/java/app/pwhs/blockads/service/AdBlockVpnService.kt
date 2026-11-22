@@ -110,6 +110,7 @@ class AdBlockVpnService : VpnService() {
     private lateinit var engineCoordinator: VpnEngineCoordinator
     private lateinit var firewallRuleDao: FirewallRuleDao
     private lateinit var configDao: ConfigDao
+    private lateinit var customDnsRuleDao: app.pwhs.blockads.data.dao.CustomDnsRuleDao
     private lateinit var appNameResolver: AppNameResolver
     private lateinit var session: VpnSessionController
     private lateinit var geoIpManager: app.pwhs.blockads.data.geoip.GeoIpManager
@@ -140,6 +141,7 @@ class AdBlockVpnService : VpnService() {
         dnsLogDao = koin.get()
         firewallRuleDao = koin.get()
         configDao = koin.get()
+        customDnsRuleDao = koin.get()
         geoIpManager = koin.get()
 
         appNameResolver = AppNameResolver(this)
@@ -171,11 +173,16 @@ class AdBlockVpnService : VpnService() {
             isEngineRunning = { goTunnelAdapter.isEngineRunning() },
             onTearDownForRestart = { session.tearDownForRestart() },
             onStartVpn = { session.startFromSupervisor() },
-            onPhaseChanged = { phase -> session.connectingPhase = phase },
+            onPhaseChanged = { phase ->
+                session.connectingPhase = phase
+                status.phase.value = phase
+            },
             onRefreshStats = {
                 session.todayBlockedCount = dnsLogDao.getBlockedCountSinceSync(startOfDayMillis())
             },
             onUpdateNotification = { updateNotification() },
+            blockedCountFlowProvider = { dnsLogDao.getBlockedCountSince(startOfDayMillis()) },
+            onBlockedCountUpdated = { count -> session.todayBlockedCount = count },
             onLinkPropertiesChanged = { linkProperties ->
                 updatePrivateDnsState(linkProperties)
                 serviceScope.launch {
@@ -232,16 +239,8 @@ class AdBlockVpnService : VpnService() {
             }
         }
         serviceScope.launch {
-            kotlinx.coroutines.flow.combine(
-                appPrefs.preferredIPType,
-                appPrefs.routingMode
-            ) { ipType, mode ->
-                val isProxyVpn = mode == AppPreferences.ROUTING_MODE_PROXY_VPN ||
-                    mode == AppPreferences.ROUTING_MODE_WIREGUARD ||
-                    mode == AppPreferences.ROUTING_MODE_SHADOWSOCKS
-                if (isProxyVpn) ipType else AppPreferences.PREFERRED_IP_AUTO
-            }.collect { effectiveIpType ->
-                if (::goTunnelAdapter.isInitialized) goTunnelAdapter.setPreferredIPType(effectiveIpType)
+            appPrefs.preferredIPType.collect { ipType ->
+                if (::goTunnelAdapter.isInitialized) goTunnelAdapter.setPreferredIPType(ipType)
             }
         }
         serviceScope.launch {
@@ -256,12 +255,40 @@ class AdBlockVpnService : VpnService() {
                 }
         }
         serviceScope.launch {
-            configDao.getActiveFlow().collect { activeConfig ->
-                if (::goTunnelAdapter.isInitialized) {
-                    val count = goTunnelAdapter.setRulesetConfig(activeConfig?.content ?: "")
-                    Timber.d("Active ruleset config updated in Go engine: %s (%d rules)", activeConfig?.name, count)
+            kotlinx.coroutines.flow.combine(
+                configDao.getActiveFlow(),
+                customDnsRuleDao.getAllFlow()
+            ) { activeConfig, customRules -> activeConfig to customRules }
+                .collect { (activeConfig, customRules) ->
+                    if (::goTunnelAdapter.isInitialized) {
+                        val userRuleLines = customRules
+                            .filter {
+                                it.isEnabled &&
+                                    it.ruleType != app.pwhs.blockads.data.entities.RuleType.COMMENT &&
+                                    it.packageName.isBlank() &&
+                                    it.rule.contains(',')
+                            }
+                            .map { it.rule.trim() }
+                        val merged = buildString {
+                            if (userRuleLines.isNotEmpty()) {
+                                appendLine("[filter_local]")
+                                userRuleLines.forEach { appendLine(it) }
+                                appendLine()
+                            }
+                            val base = activeConfig?.content.orEmpty()
+                            if (base.isNotBlank()) {
+                                append(base)
+                            }
+                        }
+                        val count = goTunnelAdapter.setRulesetConfig(merged)
+                        Timber.d(
+                            "Active ruleset config updated in Go engine: %s + %d user rules (%d total)",
+                            activeConfig?.name,
+                            userRuleLines.size,
+                            count
+                        )
+                    }
                 }
-            }
         }
         serviceScope.launch {
             geoIpManager.updateEvents.collect {
@@ -326,6 +353,9 @@ class AdBlockVpnService : VpnService() {
     }
 
     override fun onDestroy() {
+        if (::engineCoordinator.isInitialized) {
+            engineCoordinator.stopTailscaleMonitor()
+        }
         activeTunnelAdapter = null
         socketProtector = null
         tunnelSocketProtector = null

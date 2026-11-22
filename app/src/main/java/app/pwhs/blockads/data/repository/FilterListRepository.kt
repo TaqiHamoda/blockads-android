@@ -28,11 +28,13 @@ class FilterListRepository(
     private val customDnsRuleDao: CustomDnsRuleDao,
     private val client: HttpClient,
     private val downloadManager: FilterDownloadManager,
-    private val seeder: FilterListSeeder = FilterListSeeder(context, filterListDao, client)
+    private val appPreferences: app.pwhs.blockads.data.datastore.AppPreferences? = null,
+    private val seeder: FilterListSeeder = FilterListSeeder(context, filterListDao, client, appPreferences)
 ) {
 
     companion object {
         private const val CACHE_DIR = "filter_cache"
+        private const val FILTER_CACHE_SCHEMA_MARKER = ".filter_cache_v713"
         const val BLOCK_REASON_CUSTOM_RULE = "CUSTOM_RULE"
         const val BLOCK_REASON_FILTER_LIST = "FILTER_LIST"
         const val BLOCK_REASON_SECURITY = "SECURITY"
@@ -60,8 +62,9 @@ class FilterListRepository(
     }
 
     private val whitelistedDomains = ConcurrentHashMap.newKeySet<String>()
-    private val customBlockDomains = ConcurrentHashMap.newKeySet<String>()
-    private val customAllowDomains = ConcurrentHashMap.newKeySet<String>()
+
+    @Volatile
+    private var customRuleMatcher: CustomRuleMatcher = CustomRuleMatcher.EMPTY
 
     private val _domainCountFlow = MutableStateFlow(0)
     val domainCountFlow: StateFlow<Int> = _domainCountFlow.asStateFlow()
@@ -119,34 +122,48 @@ class FilterListRepository(
     }
 
     fun isBlocked(domain: String): Boolean {
-        if (checkDomainAndParents(domain) { customAllowDomains.contains(it) }) return false
-        if (checkDomainAndParents(domain) { customBlockDomains.contains(it) }) return true
-        if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) return false
-        return false
+        return when (customRuleMatcher.matchGlobal(domain)) {
+            CustomRuleMatcher.MATCH_ALLOW -> false
+            CustomRuleMatcher.MATCH_BLOCK -> true
+            else -> {
+                if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) return false
+                false
+            }
+        }
     }
 
     fun hasCustomRule(domain: String): Long {
-        if (checkDomainAndParents(domain) { customAllowDomains.contains(it) }) return 0L
-        if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) return 0L
-        if (checkDomainAndParents(domain) { customBlockDomains.contains(it) }) return 1L
-        return -1L
+        return when (customRuleMatcher.matchGlobal(domain)) {
+            CustomRuleMatcher.MATCH_ALLOW -> 0L
+            CustomRuleMatcher.MATCH_BLOCK -> {
+                if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) 0L else 1L
+            }
+            else -> {
+                if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) 0L else -1L
+            }
+        }
+    }
+
+    fun checkAppRule(domain: String, packageName: String): Long {
+        return customRuleMatcher.matchApp(domain, packageName).toLong()
     }
 
     fun getBlockReason(domain: String): String {
-        if (checkDomainAndParents(domain) { customAllowDomains.contains(it) }) return ""
-        if (checkDomainAndParents(domain) { customBlockDomains.contains(it) }) return BLOCK_REASON_CUSTOM_RULE
-        if (checkDomainAndParents(domain) { whitelistedDomains.contains(it) }) return ""
-        return ""
+        return when (customRuleMatcher.matchGlobal(domain)) {
+            CustomRuleMatcher.MATCH_ALLOW -> ""
+            CustomRuleMatcher.MATCH_BLOCK -> BLOCK_REASON_CUSTOM_RULE
+            else -> ""
+        }
     }
 
     suspend fun loadCustomRules() {
-        val blockDomains = customDnsRuleDao.getBlockDomains()
-        val allowDomains = customDnsRuleDao.getAllowDomains()
-        customBlockDomains.clear()
-        customBlockDomains.addAll(blockDomains.map { it.lowercase() })
-        customAllowDomains.clear()
-        customAllowDomains.addAll(allowDomains.map { it.lowercase() })
-        Timber.d("Loaded ${customBlockDomains.size} block + ${customAllowDomains.size} allow custom rules")
+        val enabledRules = customDnsRuleDao.getEnabledRules()
+        val compiled = CustomRuleMatcher.compile(enabledRules)
+        customRuleMatcher = compiled
+        Timber.d(
+            "Loaded ${compiled.globalBlockCount} block + ${compiled.globalAllowCount} allow custom rules, " +
+                "${compiled.appRuleSetCount} per-app rule sets"
+        )
     }
 
     suspend fun loadWhitelist() {
@@ -156,16 +173,49 @@ class FilterListRepository(
         Timber.d("Loaded ${whitelistedDomains.size} whitelisted domains")
     }
 
-    suspend fun seedDefaultsIfNeeded() = seeder.seedDefaultsIfNeeded()
+    suspend fun seedDefaultsIfNeeded(allowInStore: Boolean = false) = seeder.seedDefaultsIfNeeded(allowInStore)
 
     suspend fun fetchAndSyncRemoteFilterLists() = seeder.fetchAndSyncRemoteFilterLists()
 
     internal fun parseRemoteFilterJson(json: String): List<app.pwhs.blockads.data.remote.models.FilterList> =
         seeder.parseFilterJson(json)
 
+    private suspend fun invalidateLegacyFilterCacheIfNeeded() {
+        val marker = File(context.filesDir, FILTER_CACHE_SCHEMA_MARKER)
+        if (marker.exists()) return
+        try {
+            File(context.filesDir, CACHE_DIR).deleteRecursively()
+            val remoteDir = File(context.filesDir, "remote_filters").apply { mkdirs() }
+            val allFilters = filterListDao.getAllSync()
+            val localFilters = allFilters.filter { it.trieUrl.startsWith("local://") }
+            val localIds = localFilters.map { it.id }.toSet()
+
+            remoteDir.listFiles()?.forEach { file ->
+                val idPrefix = file.name.substringBefore('.').toLongOrNull()
+                if (file.name.endsWith(".modules.json") || idPrefix == null || idPrefix !in localIds) {
+                    file.delete()
+                }
+            }
+
+            val compiler = CustomFilterLocalCompiler(context, client, filterListDao)
+            for (filter in localFilters) {
+                val rawUrl = filter.originalUrl.ifEmpty { filter.url }.trim()
+                if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+                    runCatching { compiler.recompileOrUpdateLocally(filter) }
+                }
+            }
+
+            marker.writeText("713")
+            Timber.d("Invalidated legacy filter cache and wrote $FILTER_CACHE_SCHEMA_MARKER")
+        } catch (t: Throwable) {
+            Timber.w(t, "Failed to invalidate legacy filter cache")
+        }
+    }
+
     suspend fun loadAllEnabledFilters(): Result<Int> = withContext(Dispatchers.IO) {
         loadMutex.withLock {
             try {
+                invalidateLegacyFilterCacheIfNeeded()
                 val enabledLists = filterListDao.getEnabled()
                 if (enabledLists.isEmpty()) {
                     adTriePaths = ""

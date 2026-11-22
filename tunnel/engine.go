@@ -18,9 +18,15 @@ import (
 	"sync/atomic"
 
 	"github.com/miekg/dns"
+	"github.com/nqmgaming/blockads-tunnel/internal/mitm"
 	"github.com/nqmgaming/blockads-tunnel/internal/proxy"
 	"github.com/nqmgaming/blockads-tunnel/internal/tailscale"
 )
+
+// MitmLogCallback receives uBlock-style HTTP request and scriptlet debug events from MITM mode.
+type MitmLogCallback interface {
+	OnMitmHttpEvent(action string, rule string, method string, resourceType string, initiator string, url string, detail string)
+}
 
 // LogCallback is the interface for receiving DNS query events in Kotlin.
 // gomobile will generate the corresponding Java/Kotlin interface.
@@ -41,6 +47,12 @@ type DomainChecker interface {
 	// HasCustomRule checks if a domain matches a custom allow or block rule.
 	// Returns 1 for block override, 0 for allow override, -1 for no override.
 	HasCustomRule(domain string) int
+}
+
+// AppDomainChecker checks per-app custom allow or block domain rules.
+// Returns 1 to block the domain for appName, 0 to allow, or -1 if no per-app rule applies.
+type AppDomainChecker interface {
+	CheckAppRule(domain string, appName string) int
 }
 
 // FirewallChecker checks if a DNS query from a specific app should be blocked.
@@ -86,9 +98,10 @@ type Engine struct {
 	responseType    ResponseType
 	logCallback     LogCallback
 	resolver        *Resolver
-	safeSearch      *SafeSearch
-	domainChecker   DomainChecker
-	firewallChecker FirewallChecker
+	safeSearch       *SafeSearch
+	domainChecker    DomainChecker
+	appDomainChecker AppDomainChecker
+	firewallChecker  FirewallChecker
 	appResolver     AppResolver
 	appUidResolver  AppUidResolver
 
@@ -119,9 +132,10 @@ type Engine struct {
 	// path reads it without holding e.mu — racing with Stop would be a
 	// data race otherwise. The pipe's own Close is panic-free so a
 	// stale pointer read + Push is safe (silently drops).
-	tcpStack     *TcpIpStack
-	tcpStackPipe atomic.Pointer[packetPipe]
-	useTcpStack  atomic.Bool
+	tcpStack        *TcpIpStack
+	tcpStackPipe    atomic.Pointer[packetPipe]
+	useTcpStack     atomic.Bool
+	firewallEnabled atomic.Bool
 
 	// connLogEnabled mirrors the app's "record logs" preference. Connection
 	// logging resolves the owning app per flow, which costs two binder round
@@ -153,6 +167,9 @@ type Engine struct {
 	rulesetMatcher   atomic.Pointer[RulesetMatcher]
 	activeRulesetCfg atomic.Pointer[RulesetConfig]
 
+	// SNI Proxy routing rules (per-app / per-SNI TCP 443 redirect)
+	sniProxyRules atomic.Pointer[[]compiledSniProxyRule]
+
 	// GeoIP database
 	geoIPDB atomic.Pointer[GeoIPDatabase]
 
@@ -163,7 +180,11 @@ type Engine struct {
 	proxyClient atomic.Pointer[proxy.Client]
 
 	// Tailscale manager (lightweight integration)
-	tsManager atomic.Pointer[tailscale.Manager]
+	tsManager                 atomic.Pointer[tailscale.Manager]
+	taildropReceiver          TaildropReceiver
+	taildropDir               string
+	advertiseExitNode         bool
+	blockAdsTailscaleDisabled atomic.Bool
 
 	// preferredIPType controls whether IPv4 or IPv6 DNS records are preferred:
 	// "auto" (default): dual stack, allow both A and AAAA queries.
@@ -230,6 +251,11 @@ func (e *Engine) SetOutboundAdapter(adapter OutboundAdapter) {
 // This is called before Start() to provide the blocking logic for rules not in the trie (like Custom Rules).
 func (e *Engine) SetDomainChecker(checker DomainChecker) {
 	e.domainChecker = checker
+}
+
+// SetAppDomainChecker sets the Kotlin-side per-app domain rule checker.
+func (e *Engine) SetAppDomainChecker(checker AppDomainChecker) {
+	e.appDomainChecker = checker
 }
 
 // SetTries loads the native memory-mapped domain tries and bloom filters for blazing-fast lookups in Go.
@@ -336,9 +362,17 @@ func (e *Engine) SetTries(adTriePathsCsv, secTriePathsCsv, adBloomPathsCsv, secB
 }
 
 // SetFirewallChecker sets the Kotlin-side firewall checker.
-// This is called before Start() to enable per-app DNS blocking.
+// This is called before Start() to enable per-app DNS and flow blocking.
 func (e *Engine) SetFirewallChecker(checker FirewallChecker) {
 	e.firewallChecker = checker
+}
+
+// SetFirewallEnabled toggles per-flow L4 firewall checks in full-tunnel and WireGuard modes.
+// When false, TCP/UDP flows skip UID resolution entirely.
+func (e *Engine) SetFirewallEnabled(enabled bool) {
+	flowFirewallCache.Clear()
+	e.firewallEnabled.Store(enabled)
+	logf("SetFirewallEnabled: L4 firewall = %t", enabled)
 }
 
 // SetAppResolver sets the Kotlin-side app name resolver for logging who made the request.
@@ -355,6 +389,17 @@ func (e *Engine) SetAppUidResolver(resolver AppUidResolver) {
 // SetLogCallback sets the callback for DNS query events.
 func (e *Engine) SetLogCallback(cb LogCallback) {
 	e.logCallback = cb
+}
+
+// SetMitmLogCallback sets the callback for MITM HTTP and scriptlet debug events.
+func (e *Engine) SetMitmLogCallback(cb MitmLogCallback) {
+	if cb == nil {
+		mitm.SetDebugLogger(nil)
+		return
+	}
+	mitm.SetDebugLogger(func(ev mitm.MitmDebugEvent) {
+		cb.OnMitmHttpEvent(ev.Action, ev.Rule, ev.Method, ev.ResourceType, ev.Initiator, ev.URL, ev.Detail)
+	})
 }
 
 // SetConnLogEnabled mirrors the app's "record logs" preference into the

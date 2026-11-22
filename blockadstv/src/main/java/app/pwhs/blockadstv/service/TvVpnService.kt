@@ -17,6 +17,8 @@ import app.pwhs.blockadstv.data.repository.FilterListRepository
 import app.pwhs.blockadstv.utils.AppNameResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 enum class VpnState {
@@ -42,8 +45,10 @@ class TvVpnService : VpnService() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "blockadstv_vpn_channel"
+        private const val GO_STOP_TIMEOUT_MS = 2000L
         const val ACTION_START = "app.pwhs.blockadstv.START_VPN"
         const val ACTION_STOP = "app.pwhs.blockadstv.STOP_VPN"
+        const val ACTION_RESTART = "app.pwhs.blockadstv.RESTART_VPN"
 
         private val _state = MutableStateFlow(VpnState.STOPPED)
         val state: StateFlow<VpnState> = _state.asStateFlow()
@@ -71,10 +76,9 @@ class TvVpnService : VpnService() {
 
         fun requestRestart(context: Context) {
             val s = _state.value
-            if (s == VpnState.RUNNING) {
-                stop(context)
+            if (s == VpnState.RUNNING || s == VpnState.STARTING) {
                 val intent = Intent(context, TvVpnService::class.java).apply {
-                    action = ACTION_START
+                    action = ACTION_RESTART
                 }
                 androidx.core.content.ContextCompat.startForegroundService(context, intent)
             }
@@ -82,6 +86,8 @@ class TvVpnService : VpnService() {
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private var startJob: Job? = null
+    private var restartJob: Job? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var filterRepo: FilterListRepository
     private lateinit var tvPrefs: TvPreferences
@@ -115,6 +121,10 @@ class TvVpnService : VpnService() {
                 stopVpn()
                 return START_NOT_STICKY
             }
+            ACTION_RESTART -> {
+                restartVpn()
+                return START_STICKY
+            }
             else -> {
                 startVpn()
                 return START_STICKY
@@ -130,7 +140,7 @@ class TvVpnService : VpnService() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Connecting...", "Loading filters..."))
 
-        serviceScope.launch {
+        startJob = serviceScope.launch {
             try {
                 // Phase 1: Load filters
                 val isFirstDownload = !tvPrefs.filtersDownloaded.first()
@@ -167,13 +177,18 @@ class TvVpnService : VpnService() {
                 val activeProxy = if (isProxyVpn) tvPrefs.getActiveProxyProfileSnapshot() else null
                 val proxyProtocol = activeProxy?.protocol?.value ?: ""
                 val proxyConfigJson = activeProxy?.toEngineJson() ?: ""
+                val initialSniRules = app.pwhs.blockadstv.data.model.SniProxyRuleCodec.fromJsonList(
+                    tvPrefs.getSniProxyRulesJsonSnapshot()
+                )
+                val hasActiveSniProxy = initialSniRules.any { it.enabled && it.targetIp.isNotBlank() }
+                val needsFullTunnel = isProxyVpn || hasActiveSniProxy
 
                 Timber.d("DNS: protocol=$dnsProtocol, primary=$upstreamDns, fallback=$fallbackDns")
-                Timber.d("Response type: $dnsResponseType, routingMode: $routingMode, proxy: ${activeProxy?.displayName}")
+                Timber.d("Response type: $dnsResponseType, routingMode: $routingMode, fullTunnel: $needsFullTunnel, proxy: ${activeProxy?.displayName}")
 
                 // Phase 3: Establish VPN
-                Timber.d("Phase 3: Establishing VPN tunnel (isProxyVpn=$isProxyVpn)...")
-                val established = establishVpn(whitelistedApps, isProxyVpn)
+                Timber.d("Phase 3: Establishing VPN tunnel (isProxyVpn=$isProxyVpn, fullTunnel=$needsFullTunnel)...")
+                val established = establishVpn(whitelistedApps, needsFullTunnel)
                 if (!established) {
                     Timber.e("Failed to establish VPN")
                     stopVpn()
@@ -186,7 +201,8 @@ class TvVpnService : VpnService() {
 
                 withContext(Dispatchers.Main) {
                     val nm = getSystemService(NotificationManager::class.java)
-                    val title = if (isProxyVpn) "BlockAds TV Proxy Active" else "BlockAds TV Active"
+                    val appName = getString(R.string.app_name)
+                    val title = if (isProxyVpn) "$appName Proxy Active" else "$appName Active"
                     nm.notify(
                         NOTIFICATION_ID,
                         buildNotification(title, "$domainCount filter rules loaded")
@@ -202,6 +218,12 @@ class TvVpnService : VpnService() {
                     odohRelayUrl = odohRelayUrl,
                 )
                 goTunnelAdapter.setBlockResponseType(dnsResponseType)
+                goTunnelAdapter.setSniProxyRules(
+                    app.pwhs.blockadstv.data.model.SniProxyRuleCodec.toEngineJson(
+                        initialSniRules,
+                        packageManager
+                    )
+                )
                 Timber.d("Go engine configured, starting tunnel...")
 
                 // Dynamically update Go Engine tries whenever filters change
@@ -244,6 +266,27 @@ class TvVpnService : VpnService() {
                     }
                 }
 
+                // Dynamically update SNI proxy rules
+                launch {
+                    var wasFullTunnel = needsFullTunnel
+                    tvPrefs.sniProxyRulesJson.drop(1).collectLatest { raw ->
+                        val parsed = app.pwhs.blockadstv.data.model.SniProxyRuleCodec.fromJsonList(raw)
+                        val nowNeedsFull = isProxyVpn || parsed.any { it.enabled && it.targetIp.isNotBlank() }
+                        if (nowNeedsFull != wasFullTunnel) {
+                            wasFullTunnel = nowNeedsFull
+                            Timber.d("SNI proxy full-tunnel requirement changed to $nowNeedsFull, restarting VPN")
+                            requestRestart(this@TvVpnService)
+                        } else {
+                            goTunnelAdapter.setSniProxyRules(
+                                app.pwhs.blockadstv.data.model.SniProxyRuleCodec.toEngineJson(
+                                    parsed,
+                                    packageManager
+                                )
+                            )
+                        }
+                    }
+                }
+
                 vpnInterface?.let {
                     goTunnelAdapter.start(
                         vpnInterface = it,
@@ -252,6 +295,7 @@ class TvVpnService : VpnService() {
                         },
                         proxyProtocol = proxyProtocol,
                         proxyConfigJson = proxyConfigJson,
+                        useFullTunnel = needsFullTunnel,
                     )
                 }
 
@@ -269,8 +313,9 @@ class TvVpnService : VpnService() {
         }
 
         return try {
+            val appName = getString(R.string.app_name)
             val builder = Builder()
-                .setSession(if (isProxyVpn) "BlockAds TV Proxy" else "BlockAds TV")
+                .setSession(if (isProxyVpn) "$appName Proxy" else appName)
                 .addAddress("100.64.100.2", 32)
                 .addAddress("fd00::2", 128)
                 .addDnsServer("100.64.100.1")
@@ -337,18 +382,52 @@ class TvVpnService : VpnService() {
         }
     }
 
+    private fun restartVpn() {
+        startJob?.cancel()
+        startJob = null
+        restartJob?.cancel()
+        _state.value = VpnState.STOPPING
+        startTimestamp = 0L
+
+        restartJob = serviceScope.launch(Dispatchers.IO) {
+            try { vpnInterface?.close() } catch (_: Exception) {}
+            vpnInterface = null
+
+            val goStop = launch(NonCancellable + Dispatchers.IO) { goTunnelAdapter.stop() }
+            if (withTimeoutOrNull(GO_STOP_TIMEOUT_MS) { goStop.join() } == null) {
+                Timber.w("Go tunnel stop still running after ${GO_STOP_TIMEOUT_MS}ms during restart")
+            }
+
+            withContext(Dispatchers.Main) {
+                if (_state.value != VpnState.STOPPING) return@withContext
+                _state.value = VpnState.STOPPED
+                startVpn()
+            }
+        }
+    }
+
     private fun stopVpn() {
+        startJob?.cancel()
+        startJob = null
+        restartJob?.cancel()
+        restartJob = null
         _state.value = VpnState.STOPPING
         startTimestamp = 0L
 
         serviceScope.launch(Dispatchers.IO) {
-            goTunnelAdapter.stop()
             tvPrefs.setVpnEnabled(false)
 
+            // Close TUN fd first so OS tears down routes immediately, even if Go stack drain takes longer.
             try { vpnInterface?.close() } catch (_: Exception) {}
             vpnInterface = null
 
+            val goStop = launch(NonCancellable + Dispatchers.IO) { goTunnelAdapter.stop() }
+            if (withTimeoutOrNull(GO_STOP_TIMEOUT_MS) { goStop.join() } == null) {
+                Timber.w("Go tunnel stop still running after ${GO_STOP_TIMEOUT_MS}ms — finishing shutdown anyway")
+            }
+
             withContext(Dispatchers.Main) {
+                if (_state.value != VpnState.STOPPING) return@withContext
                 _state.value = VpnState.STOPPED
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -376,7 +455,7 @@ class TvVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "BlockAds TV VPN",
+                "${getString(R.string.app_name)} VPN",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = "VPN service notification"

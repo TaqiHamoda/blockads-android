@@ -48,7 +48,13 @@ func (e *Engine) handleDNSQuery(queryInfo *DNSQueryInfo) {
 
 	// Tailscale MagicDNS: resolve local Tailnet machine names directly with 0ms latency.
 	if ip := e.resolveTailscaleMagicDNS(domain); ip != nil {
-		response := BuildRedirectResponse(queryInfo, ip)
+		var redirectIP net.IP
+		if queryInfo.QueryType == dns.TypeA && ip.To4() != nil {
+			redirectIP = ip
+		} else if queryInfo.QueryType == dns.TypeAAAA && ip.To4() == nil {
+			redirectIP = ip
+		}
+		response := BuildRedirectResponse(queryInfo, redirectIP)
 		e.writeToTUN(response)
 		e.totalQueries.Add(1)
 		return
@@ -107,6 +113,19 @@ func (e *Engine) handleDNSQuery(queryInfo *DNSQueryInfo) {
 	// YouTube restricted mode check
 	if isYT, ytDomain := e.safeSearch.CheckYouTube(domain, queryInfo.QueryType); isYT {
 		if e.handleSafeSearchRedirect(queryInfo, ytDomain, appName, startTime) {
+			return
+		}
+	}
+
+	// ── Per-App Custom Rules Override ──
+	// 1 = Block for this app, 0 = Allow for this app, -1 = No per-app rule
+	if e.appDomainChecker != nil && appName != "" {
+		appOverride := e.appDomainChecker.CheckAppRule(domain, appName)
+		if appOverride == 0 {
+			e.handleForward(queryInfo, appName, startTime)
+			return
+		} else if appOverride == 1 {
+			e.handleBlockedDomain(queryInfo, "custom_app_rule", appName, startTime)
 			return
 		}
 	}

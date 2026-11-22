@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -129,6 +130,26 @@ class SettingsViewModel(
 
     val milestoneNotificationsEnabled: StateFlow<Boolean> = appPrefs.milestoneNotificationsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val homeTipsEnabled: StateFlow<Boolean> = appPrefs.homeTipsEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val logRetentionDays: StateFlow<Int> = appPrefs.logRetentionDays
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val updateChannel: StateFlow<app.pwhs.blockads.update.UpdateChannel> = appPrefs.updateChannel
+        .map { stored ->
+            if (stored != null) {
+                app.pwhs.blockads.update.UpdateChannel.fromId(stored)
+            } else {
+                app.pwhs.blockads.update.UpdateChannel.fromVersionName(app.pwhs.blockads.BuildConfig.VERSION_NAME)
+            }
+        }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            app.pwhs.blockads.update.UpdateChannel.fromVersionName(app.pwhs.blockads.BuildConfig.VERSION_NAME)
+        )
 
     val upstreamDns: StateFlow<String> = kotlinx.coroutines.flow.combine(
         appPrefs.dnsProviderId,
@@ -324,10 +345,34 @@ class SettingsViewModel(
         }
     }
 
+    fun setHomeTipsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appPrefs.setHomeTipsEnabled(enabled)
+        }
+    }
+
     fun clearLogs() {
         viewModelScope.launch {
             dnsLogDao.clearAll()
             _events.toast(R.string.filter_log_cleared)
+        }
+    }
+
+    fun setLogRetentionDays(days: Int) {
+        viewModelScope.launch {
+            appPrefs.setLogRetentionDays(days)
+            val context = getApplication<Application>().applicationContext
+            app.pwhs.blockads.worker.LogCleanupWorker.syncSchedule(context, days)
+            if (days > 0) {
+                val cutoff = System.currentTimeMillis() - (days.toLong() * app.pwhs.blockads.worker.LogCleanupWorker.MILLIS_PER_DAY)
+                dnsLogDao.deleteLogsOlderThan(cutoff)
+            }
+        }
+    }
+
+    fun setUpdateChannel(channel: app.pwhs.blockads.update.UpdateChannel) {
+        viewModelScope.launch {
+            appPrefs.setUpdateChannel(channel.id)
         }
     }
 
