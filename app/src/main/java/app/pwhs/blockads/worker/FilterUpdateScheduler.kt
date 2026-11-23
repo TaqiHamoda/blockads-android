@@ -38,12 +38,21 @@ object FilterUpdateScheduler {
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
             .build()
 
+        // Flex = period / 4: the update stays once-per-cycle but becomes
+        // eligible across the whole last quarter of the period instead of a
+        // single instant, so Doze maintenance windows and intermittent
+        // battery-saver lifts can serve it. Without flex, a missed pickup
+        // instant slips the run a full period. Flex is expressed against
+        // TimeUnit.MINUTES so the 6h preset gets a 90-minute window rather
+        // than an hour-on-the-floor from integer hour division.
+        val periodMinutes = intervalHours * 60
         val workRequest = PeriodicWorkRequestBuilder<FilterUpdateWorker>(
-            intervalHours,
-            TimeUnit.HOURS
+            periodMinutes,
+            TimeUnit.MINUTES,
+            periodMinutes / 4,
+            TimeUnit.MINUTES
         )
             .setConstraints(constraints)
             .build()
