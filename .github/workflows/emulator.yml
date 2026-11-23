@@ -58,7 +58,16 @@ jobs:
 
       # Built from source, like ci.yml, so the tests exercise this revision's Go engine.
       - name: Build Go Tunnel (tunnel.aar)
-        run: ./gradlew -Ptunnel.source=local buildGoTunnel
+        # Retry: plugin/dependency resolution from public Maven repos
+        # occasionally fails transiently on hosted runners.
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew -Ptunnel.source=local buildGoTunnel && break
+            status=$?
+            if [ $attempt -eq 3 ]; then exit $status; fi
+            echo "Build attempt $attempt failed, retrying..."
+            sleep $((attempt * 15))
+          done
 
       - name: Upload tunnel.aar
         uses: actions/upload-artifact@v4
