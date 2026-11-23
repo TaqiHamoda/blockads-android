@@ -1,10 +1,13 @@
 package app.pwhs.blockads.ui.home.component
 
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import app.pwhs.blockads.service.AdBlockDeviceAdminReceiver
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -352,9 +355,24 @@ fun checkBatteryIgnored(context: Context): Boolean {
 }
 
 fun checkAlwaysOnVpn(context: Context): Boolean {
+    // Try the DPM first: when the app is device owner, always-on is set
+    // through the DevicePolicyManager (DeviceOwnerManager.enforceRestrictions)
+    // and does not write the legacy Settings.Secure key — the DPM is the
+    // authoritative source. getAlwaysOnVpnPackage is only readable by the
+    // device owner itself; any other caller gets a SecurityException.
+    val viaDpm = runCatching {
+        val dpm =
+            context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+        val admin = ComponentName(context, AdBlockDeviceAdminReceiver::class.java)
+        dpm?.getAlwaysOnVpnPackage(admin)?.let { it == context.packageName }
+    }.getOrNull()
+    if (viaDpm != null) return viaDpm
+
+    // Non-device-owner installs (or a failed DPM read): fall back to the
+    // legacy Settings.Secure key, the only readable source in that case.
     return runCatching {
-        val app = Settings.Secure.getString(context.contentResolver, "always_on_vpn_app")
-        app == context.packageName
+        Settings.Secure.getString(context.contentResolver, "always_on_vpn_app") ==
+                context.packageName
     }.getOrDefault(false)
 }
 
