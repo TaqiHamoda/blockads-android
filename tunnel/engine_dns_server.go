@@ -43,13 +43,14 @@ func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) 
 			rr, _ := dns.NewRR(fmt.Sprintf("%s 300 IN AAAA %s", r.Question[0].Name, localAssetSynthIPv6.String()))
 			m.Answer = append(m.Answer, rr)
 		}
-		_ = w.WriteMsg(m)
+		// Count before the write: the client can observe the reply
+		// before the increment lands otherwise.
 		e.totalQueries.Add(1)
+		_ = w.WriteMsg(m)
 		return
 	}
 
-	// Preferred IP Type filtering:
-	// - "auto" (default): do nothing, resolve both IPv4 (A) and IPv6 (AAAA).
+	// Preferred IP Type filtering:	// - "auto" (default): do nothing, resolve both IPv4 (A) and IPv6 (AAAA).
 	// - "ipv4": suppress AAAA queries so clients fall back to IPv4 (A records).
 	// - "ipv6": suppress A queries ONLY when the domain actually has an AAAA record,
 	//           so IPv4-only domains (e.g. vnexpress.net) still resolve via IPv4.
@@ -58,8 +59,8 @@ func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) 
 		m := new(dns.Msg)
 		m.SetReply(r)
 		m.Rcode = dns.RcodeSuccess
-		_ = w.WriteMsg(m)
 		e.totalQueries.Add(1)
+		_ = w.WriteMsg(m)
 		return
 	}
 
@@ -75,8 +76,8 @@ func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) 
 			rr, _ := dns.NewRR(fmt.Sprintf("%s 300 IN AAAA %s", r.Question[0].Name, ip.String()))
 			m.Answer = append(m.Answer, rr)
 		}
-		_ = w.WriteMsg(m)
 		e.totalQueries.Add(1)
+		_ = w.WriteMsg(m)
 		e.notifyLog(domain, false, queryType, time.Since(startTime).Milliseconds(), appOverride, ip.String(), "tailscale_magicdns")
 		return
 	}
@@ -287,8 +288,8 @@ func (e *Engine) serveDNS(w dns.ResponseWriter, r *dns.Msg, appOverride string) 
 		m := new(dns.Msg)
 		m.SetReply(r)
 		m.Rcode = dns.RcodeSuccess
-		_ = w.WriteMsg(m)
 		e.totalQueries.Add(1)
+		_ = w.WriteMsg(m)
 		return
 	}
 

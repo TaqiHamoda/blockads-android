@@ -28,9 +28,11 @@ func (e *Engine) standaloneBlock(w dns.ResponseWriter, r *dns.Msg, blockedBy, ap
 		}
 	}
 
-	_ = w.WriteMsg(m)
+	// Count before the write: the client can observe the reply
+	// before the increment lands otherwise.
 	e.totalQueries.Add(1)
 	e.blockedQueries.Add(1)
+	_ = w.WriteMsg(m)
 	elapsed := time.Since(startTime).Milliseconds()
 	e.notifyLog(strings.TrimSuffix(r.Question[0].Name, "."), true, r.Question[0].Qtype, elapsed, appName, "", blockedBy)
 }
@@ -53,8 +55,8 @@ func (e *Engine) standaloneForward(w dns.ResponseWriter, r *dns.Msg, appName str
 	respRaw, err := resolver.Resolve(raw)
 	if err != nil {
 		logf("DNS resolve failed standalone %s: %v", r.Question[0].Name, err)
-		dns.HandleFailed(w, r)
 		e.totalQueries.Add(1)
+		dns.HandleFailed(w, r)
 		elapsed := time.Since(startTime).Milliseconds()
 		e.notifyLog(strings.TrimSuffix(r.Question[0].Name, "."), false, r.Question[0].Qtype, elapsed, appName, "", "")
 		return
@@ -112,8 +114,10 @@ func (e *Engine) standaloneRedirect(w dns.ResponseWriter, r *dns.Msg, redirectDo
 		m.Answer = append(m.Answer, rr)
 	}
 
-	_ = w.WriteMsg(m)
+	// Count before the write: the client can observe the reply
+	// before the increment lands otherwise.
 	e.totalQueries.Add(1)
+	_ = w.WriteMsg(m)
 	elapsed := time.Since(startTime).Milliseconds()
 	e.notifyLog(strings.TrimSuffix(r.Question[0].Name, "."), false, r.Question[0].Qtype, elapsed, appName, ip.String(), "")
 	return true

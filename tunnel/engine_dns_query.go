@@ -33,16 +33,19 @@ func (e *Engine) handleDNSQuery(queryInfo *DNSQueryInfo) {
 			synthIP = localAssetSynthIPv6
 		}
 		response := BuildRedirectResponse(queryInfo, synthIP)
-		e.writeToTUN(response)
+		// Count before the write: writeToTUN is async (PacketPipe), so a
+		// counter update after it can be overtaken by the client reading the
+		// reply — GetStats then undercounts (CI TestStartFullDNS flake).
 		e.totalQueries.Add(1)
+		e.writeToTUN(response)
 		return
 	}
 
 	pref := e.getPreferredIPType()
 	if pref == "ipv4" && queryInfo.QueryType == dns.TypeAAAA {
 		emptyResp := BuildRedirectResponse(queryInfo, nil)
-		e.writeToTUN(emptyResp)
 		e.totalQueries.Add(1)
+		e.writeToTUN(emptyResp)
 		return
 	}
 
@@ -55,8 +58,8 @@ func (e *Engine) handleDNSQuery(queryInfo *DNSQueryInfo) {
 			redirectIP = ip
 		}
 		response := BuildRedirectResponse(queryInfo, redirectIP)
-		e.writeToTUN(response)
 		e.totalQueries.Add(1)
+		e.writeToTUN(response)
 		return
 	}
 
@@ -231,8 +234,8 @@ func (e *Engine) handleDNSQuery(queryInfo *DNSQueryInfo) {
 
 	if pref == "ipv6" && queryInfo.QueryType == dns.TypeA && e.domainHasAAAA(domain) {
 		emptyResp := BuildRedirectResponse(queryInfo, nil)
-		e.writeToTUN(emptyResp)
 		e.totalQueries.Add(1)
+		e.writeToTUN(emptyResp)
 		return
 	}
 
@@ -265,8 +268,9 @@ func (e *Engine) handleSafeSearchRedirect(queryInfo *DNSQueryInfo, redirectDomai
 	}
 
 	response := BuildRedirectResponse(queryInfo, ip)
-	e.writeToTUN(response)
+	// Count before the write: writeToTUN is async (PacketPipe).
 	e.totalQueries.Add(1)
+	e.writeToTUN(response)
 
 	elapsed := time.Since(startTime).Milliseconds()
 	e.notifyLog(queryInfo.Domain, false, queryInfo.QueryType, elapsed, appName, ip.String(), "")
@@ -285,9 +289,10 @@ func (e *Engine) handleFirewallBlock(queryInfo *DNSQueryInfo, appName string, st
 		response = BuildBlockedResponse(queryInfo)
 	}
 
-	e.writeToTUN(response)
+	// Count before the write: writeToTUN is async (PacketPipe).
 	e.totalQueries.Add(1)
 	e.blockedQueries.Add(1)
+	e.writeToTUN(response)
 
 	elapsed := time.Since(startTime).Milliseconds()
 	logf("BLOCKED: %s (by: firewall, app: %s)", queryInfo.Domain, appName)
@@ -306,9 +311,10 @@ func (e *Engine) handleBlockedDomain(queryInfo *DNSQueryInfo, blockedBy, appName
 		response = BuildBlockedResponse(queryInfo)
 	}
 
-	e.writeToTUN(response)
+	// Count before the write: writeToTUN is async (PacketPipe).
 	e.totalQueries.Add(1)
 	e.blockedQueries.Add(1)
+	e.writeToTUN(response)
 
 	elapsed := time.Since(startTime).Milliseconds()
 	logf("BLOCKED: %s (by: %s, app: %s)", queryInfo.Domain, blockedBy, appName)
@@ -330,8 +336,8 @@ func (e *Engine) handleForward(queryInfo *DNSQueryInfo, appName string, startTim
 	if err != nil {
 		logf("DNS resolve failed for %s: %v", queryInfo.Domain, err)
 		servfail := BuildServfailResponse(queryInfo)
-		e.writeToTUN(servfail)
 		e.totalQueries.Add(1)
+		e.writeToTUN(servfail)
 
 		elapsed := time.Since(startTime).Milliseconds()
 		e.notifyLog(queryInfo.Domain, false, queryInfo.QueryType, elapsed, appName, "", "")
@@ -341,9 +347,9 @@ func (e *Engine) handleForward(queryInfo *DNSQueryInfo, appName string, startTim
 	// Detect upstream DNS blocking (e.g., NextDNS/AdGuard DNS returning 0.0.0.0)
 	if isUpstreamBlocked(resp) {
 		response := BuildForwardedResponse(queryInfo, resp)
-		e.writeToTUN(response)
 		e.totalQueries.Add(1)
 		e.blockedQueries.Add(1)
+		e.writeToTUN(response)
 
 		elapsed := time.Since(startTime).Milliseconds()
 		logf("BLOCKED: %s (by: upstream_dns, app: %s)", queryInfo.Domain, appName)
@@ -368,8 +374,8 @@ func (e *Engine) handleForward(queryInfo *DNSQueryInfo, appName string, startTim
 	}
 
 	response := BuildForwardedResponse(queryInfo, resp)
-	e.writeToTUN(response)
 	e.totalQueries.Add(1)
+	e.writeToTUN(response)
 
 	elapsed := time.Since(startTime).Milliseconds()
 	e.notifyLog(queryInfo.Domain, false, queryInfo.QueryType, elapsed, appName, "", "")
