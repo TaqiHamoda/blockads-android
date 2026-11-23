@@ -121,7 +121,17 @@ improve the app.
    ./gradlew bundleRelease   # requires signing key
    ```
 
----  
+### Activating Device Owner (optional)
+
+Granting BlockAds Device Owner privileges — one `adb` command on a device **without** Google accounts set up yet (sign in afterwards; Android refuses `set-device-owner` once accounts exist):
+
+```bash
+adb shell dpm set-device-owner app.pwhs.blockads/.service.AdBlockDeviceAdminReceiver
+```
+
+Benefits: the OS enforces **always-on VPN** (BlockAds survives reboot and can't be dismissed), **other VPN apps are blocked** so nothing can bypass ad blocking (`DISALLOW_CONFIG_VPN`), and **debugging features are disallowed** for tamper resistance (`DISALLOW_DEBUGGING_FEATURES`). It also unlocks the *Device Owner Control* section in Settings and the DPM-aware Lockdown Mode checks. It can be revoked anytime from Settings → *Remove Device Owner*.
+
+---
 
 ## How It Works
 
