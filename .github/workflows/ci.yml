@@ -114,16 +114,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build tunnel.aar
-        # Retry: plugin/dependency resolution from public Maven repos
-        # occasionally fails transiently on hosted runners (run 45237917783).
-        run: |
-          for attempt in 1 2 3; do
-            ./gradlew -Ptunnel.source=local buildGoTunnel && break
-            status=$?
-            if [ $attempt -eq 3 ]; then exit $status; fi
-            echo "Build attempt $attempt failed, retrying..."
-            sleep $((attempt * 15))
-          done
+        run: ./gradlew -Ptunnel.source=local buildGoTunnel
 
       - name: Upload tunnel.aar
         uses: actions/upload-artifact@v4
