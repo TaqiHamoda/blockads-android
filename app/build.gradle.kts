@@ -64,7 +64,7 @@ android {
         applicationId = "app.pwhs.blockads"
         minSdk = 24
         targetSdk = 36
-        versionCode = 67
+        versionCode = 69
         versionName = "7.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -180,6 +180,10 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    androidResources {
+        noCompress += listOf("txt", "bin")
     }
 
     dependenciesInfo {

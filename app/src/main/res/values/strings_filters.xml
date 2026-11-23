@@ -1,9 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="filter_updated">Filter list updated: %d domains</string>
     <string name="filter_update_failed">Failed to update filter list</string>
     <string name="filter_detail_enabled">Enabled</string>
     <string name="filter_detail_rules">Rules</string>
+    <string name="filter_detail_rule_breakdown">Rule Breakdown</string>
+    <string name="filter_rule_kind_domains">DNS Domains</string>
+    <string name="filter_rule_kind_domains_desc">Block domain lookups at the DNS layer</string>
+    <string name="filter_rule_kind_ips">IP &amp; CIDR</string>
+    <string name="filter_rule_kind_ips_desc">Block direct connections to IPs and subnets</string>
+    <string name="filter_rule_kind_cosmetic">Cosmetic Hiding</string>
+    <string name="filter_rule_kind_cosmetic_desc">Hide ad banners, popups, and page elements</string>
+    <string name="filter_rule_kind_cosmetic_exceptions">Cosmetic Exceptions</string>
+    <string name="filter_rule_kind_cosmetic_exceptions_desc">Keep legitimate elements visible to avoid breakage</string>
+    <string name="filter_rule_kind_inject_css">CSS Injection</string>
+    <string name="filter_rule_kind_inject_css_desc">Apply custom style rules to web pages</string>
+    <string name="filter_rule_kind_scriptlets">Scriptlets</string>
+    <string name="filter_rule_kind_scriptlets_desc">Defeat anti-adblock and ad scripts</string>
+    <string name="filter_rule_kind_scriptlet_exceptions">Scriptlet Exceptions</string>
+    <string name="filter_rule_kind_scriptlet_exceptions_desc">Disable specific scriptlets on compatible sites</string>
+    <string name="filter_rule_kind_block_paths">URL Path Blocks</string>
+    <string name="filter_rule_kind_block_paths_desc">Block ad resources by HTTPS request path</string>
+    <string name="filter_rule_kind_remove_params">Tracking Param Stripping</string>
+    <string name="filter_rule_kind_remove_params_desc">Remove tracking parameters from URLs</string>
     <string name="filter_detail_last_updated">Last updated</string>
     <string name="filter_detail_update">Update</string>
     <string name="filter_detail_delete">Delete</string>
@@ -229,6 +248,8 @@
     <string name="filter_overlap_tab_overview">Overview</string>
     <string name="filter_overlap_tab_duplicates">Duplicates</string>
     <string name="filter_overlap_export_combined">Export Combined List</string>
+    <string name="filter_overlap_share_combined">Share Combined List</string>
+    <string name="filter_overlap_share_title">Share Combined Filter List</string>
     <string name="filter_overlap_export_desc">Save all unique domains from your enabled lists into a single deduplicated file.</string>
     <string name="filter_overlap_headline_redundant">%1$.0f%% of your filter rules are duplicates</string>
     <string name="filter_overlap_headline_clean">No duplicate rules found</string>
@@ -252,8 +273,16 @@
     <string name="filter_overlap_need_two">Enable at least 2 downloaded filter lists to detect duplicate rules, spot redundant lists you can turn off, and export one clean combined list.</string>
     <string name="filter_overlap_no_duplicates">No overlapping domains found between the selected filters.</string>
     <string name="filter_overlap_showing_capped">Showing first %1$d matching duplicates</string>
-    <string name="filter_overlap_exported">Exported %1$s unique domains</string>
+    <string name="filter_overlap_exported">Exported %1$s unique rules</string>
     <string name="filter_overlap_export_failed">Failed to export combined filter list</string>
+    <string name="filter_overlap_category_all">All</string>
+    <string name="filter_overlap_category_domains">Domains</string>
+    <string name="filter_overlap_category_cosmetic">Cosmetic</string>
+    <string name="filter_overlap_category_scriptlets">Scriptlets</string>
+    <string name="filter_overlap_category_ips">IPs</string>
+    <string name="filter_overlap_category_url_rules">URL Rules</string>
+    <string name="filter_overlap_search_hint_rules">Search duplicate rules…</string>
+    <string name="filter_overlap_no_duplicates_rules">No overlapping rules found between the selected filters.</string>
     <string name="domain_rules_tab_sni_proxy">SNI Proxy</string>
     <string name="sni_proxy_empty_title">SNI Proxy Routing</string>
     <string name="sni_proxy_empty_desc">Route TLS 443 traffic of specific apps (e.g. YouTube) and domains directly to a custom SNI Proxy IP without changing system DNS.</string>

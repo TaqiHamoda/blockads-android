@@ -12,11 +12,10 @@ import timber.log.Timber
 object TunnelRuleLoader {
 
     /**
-     * Loads cosmetic CSS from the active browser rule package (adblock_cosmetic.css / remote updates)
-     * combined with compiled filter-list cosmetic rules (cosmetic_rules.css).
+     * Loads the built-in browser cosmetic CSS (adblock_cosmetic.css / remote updates).
      */
-    fun loadCosmeticCss(context: Context, filterCosmeticCssPath: String? = null): String {
-        val baseCss = try {
+    private fun loadBaseCosmeticCss(context: Context): String {
+        return try {
             val storage = BrowserRuleStorage(context)
             val pkg = storage.getActivePackage()
             val raw = pkg.cosmeticCss?.trim()
@@ -31,6 +30,56 @@ object TunnelRuleLoader {
                 context.assets.open("browser/adblock_cosmetic.css").bufferedReader().use { it.readText() }
             }.getOrDefault("")
         }
+    }
+
+    /**
+     * Prepares a single cosmetic CSS file on disk for the Go engine so large filter-list CSS
+     * files can be loaded via [tunnel.Engine.setCosmeticCSSFromFile] without allocating on the JVM heap.
+     */
+    internal fun prepareEngineCosmeticCssFile(
+        context: Context,
+        filterCosmeticCssPath: String,
+        useBuiltIn: Boolean
+    ): java.io.File? {
+        val filterFile = java.io.File(filterCosmeticCssPath)
+        if (!filterFile.exists() || filterFile.length() == 0L) return null
+        if (!useBuiltIn) return filterFile
+
+        val baseCss = loadBaseCosmeticCss(context)
+        if (baseCss.isBlank()) return filterFile
+
+        val outDir = filterFile.parentFile ?: java.io.File(context.filesDir, "filter_cache").apply { mkdirs() }
+        val mergedFile = java.io.File(outDir, "cosmetic_engine_merged.css")
+        val tmpFile = java.io.File(outDir, "cosmetic_engine_merged.css.tmp")
+        return try {
+            tmpFile.outputStream().use { out ->
+                out.write(baseCss.toByteArray(Charsets.UTF_8))
+                out.write('\n'.code)
+                filterFile.inputStream().use { input ->
+                    val buffer = ByteArray(16 * 1024)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } >= 0) {
+                        if (read > 0) out.write(buffer, 0, read)
+                    }
+                }
+            }
+            if (!tmpFile.renameTo(mergedFile)) {
+                tmpFile.copyTo(mergedFile, overwrite = true)
+                tmpFile.delete()
+            }
+            mergedFile
+        } catch (t: Throwable) {
+            tmpFile.delete()
+            throw t
+        }
+    }
+
+    /**
+     * Loads cosmetic CSS from the active browser rule package (adblock_cosmetic.css / remote updates)
+     * combined with compiled filter-list cosmetic rules (cosmetic_rules.css).
+     */
+    fun loadCosmeticCss(context: Context, filterCosmeticCssPath: String? = null): String {
+        val baseCss = loadBaseCosmeticCss(context)
 
         val filterCss = if (!filterCosmeticCssPath.isNullOrBlank()) {
             runCatching {
@@ -151,7 +200,7 @@ object TunnelRuleLoader {
      * Reads modules.json, resolves any bundled script names,
      * and returns the JSON string.
      */
-    fun loadModulesJson(context: Context, @Suppress("UNUSED_PARAMETER") filterModulesPath: String? = null): String {
+    fun loadModulesJson(context: Context, filterModulesPath: String? = null): String {
         return try {
             val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true }
             val assetRaw = runCatching {
@@ -171,14 +220,23 @@ object TunnelRuleLoader {
                 runCatching { json.decodeFromString<app.pwhs.blockads.data.models.ModulesPackage>(cachedRaw) }.getOrNull()
             } else null
 
-            val pkg = when {
+            val basePkg = when {
                 cachedPkg != null && assetPkg != null -> if (assetPkg.version >= cachedPkg.version) assetPkg else cachedPkg
                 assetPkg != null -> assetPkg
                 cachedPkg != null -> cachedPkg
-                else -> return ""
+                else -> app.pwhs.blockads.data.models.ModulesPackage()
             }
 
-            val resolvedModules = pkg.modules.map { mod ->
+            val filterModPkg = if (!filterModulesPath.isNullOrBlank()) {
+                val f = java.io.File(filterModulesPath)
+                if (f.exists() && f.length() > 0L) {
+                    runCatching {
+                        json.decodeFromString<app.pwhs.blockads.data.models.ModuleRulesPackage>(f.readText())
+                    }.getOrNull()
+                } else null
+            } else null
+
+            val resolvedModules = basePkg.modules.map { mod ->
                 val resolvedScripts = mod.scripts.map { scriptRef ->
                     if (scriptRef.endsWith(".js")) {
                         runCatching {
@@ -191,9 +249,37 @@ object TunnelRuleLoader {
                 mod.copy(scripts = resolvedScripts)
             }
 
+            val mergedPkg = if (filterModPkg != null) {
+                val mergedDomains = basePkg.domains.toMutableMap()
+                for ((domain, rules) in filterModPkg.domains) {
+                    val existing = mergedDomains[domain]
+                    mergedDomains[domain] = if (existing == null) {
+                        rules
+                    } else {
+                        app.pwhs.blockads.data.models.DomainModuleRules(
+                            css = (existing.css + rules.css).distinct(),
+                            cssExceptions = (existing.cssExceptions + rules.cssExceptions).distinct(),
+                            injectCss = (existing.injectCss + rules.injectCss).distinct(),
+                            blockPaths = (existing.blockPaths + rules.blockPaths).distinct(),
+                            removeParams = (existing.removeParams + rules.removeParams).distinct()
+                        )
+                    }
+                }
+                basePkg.copy(
+                    modules = resolvedModules,
+                    domains = mergedDomains,
+                    globalPathsSnake = (basePkg.globalPathsSnake + filterModPkg.globalBlockPaths).distinct(),
+                    globalCssExceptions = (basePkg.globalCssExceptions + filterModPkg.globalCssExceptions).distinct(),
+                    globalInjectCss = (basePkg.globalInjectCss + filterModPkg.globalInjectCss).distinct(),
+                    globalRemoveParams = (basePkg.globalRemoveParams + filterModPkg.globalRemoveParams).distinct()
+                )
+            } else {
+                basePkg.copy(modules = resolvedModules)
+            }
+
             json.encodeToString(
                 app.pwhs.blockads.data.models.ModulesPackage.serializer(),
-                pkg.copy(modules = resolvedModules)
+                mergedPkg
             )
         } catch (e: Exception) {
             Timber.w(e, "Failed to load and resolve modules.json")
@@ -354,14 +440,20 @@ object TunnelRuleLoader {
         val useBuiltIn = isBuiltInRulesEnabled(context)
 
         runCatching {
-            val css = if (useBuiltIn) {
-                loadCosmeticCss(context, filterRepo.getCosmeticCssPath())
+            val filterCssPath = filterRepo.getCosmeticCssPath()
+            val cssFile = if (!filterCssPath.isNullOrBlank()) {
+                prepareEngineCosmeticCssFile(context, filterCssPath, useBuiltIn)
             } else {
-                val p = filterRepo.getCosmeticCssPath()
-                if (!p.isNullOrBlank()) java.io.File(p).takeIf { it.exists() }?.readText().orEmpty() else ""
+                null
             }
-            engine.setCosmeticCSS(css)
-            Timber.d("Cosmetic CSS updated for engine (builtIn=%b): %d bytes", useBuiltIn, css.length)
+            if (cssFile != null) {
+                engine.setCosmeticCSSFromFile(cssFile.absolutePath)
+                Timber.d("Cosmetic CSS loaded from file for engine (builtIn=%b): %d bytes", useBuiltIn, cssFile.length())
+            } else {
+                val css = if (useBuiltIn) loadBaseCosmeticCss(context) else ""
+                engine.setCosmeticCSS(css)
+                Timber.d("Cosmetic CSS updated for engine (builtIn=%b): %d bytes", useBuiltIn, css.length)
+            }
         }.onFailure {
             Timber.e(it, "Failed to load cosmetic CSS for engine")
             engine.setCosmeticCSS("")
@@ -404,6 +496,33 @@ object TunnelRuleLoader {
         }.onFailure {
             Timber.e(it, "Failed to load ad path patterns for engine")
             engine.setAdPathPatterns("")
+        }
+
+        loadIpBlocklists(engine, filterRepo)
+    }
+
+    /**
+     * Loads `.ips` sidecar blocklists from enabled filters into the Go engine.
+     * Uses reflective lookup so the app continues compiling against older prebuilt tunnel.aar
+     * releases until the next tunnel AAR containing SetIPBlocklistFromFiles is published.
+     */
+    fun loadIpBlocklists(
+        engine: tunnel.Engine,
+        filterRepo: app.pwhs.blockads.data.repository.FilterListRepository
+    ) {
+        val paths = filterRepo.getIpBlocklistPaths()
+        runCatching {
+            val method = engine.javaClass.getMethod("setIPBlocklistFromFiles", String::class.java)
+            method.invoke(engine, paths)
+            if (paths.isNotEmpty()) {
+                Timber.d("Loaded IP blocklist files into engine: ${paths.lines().size} file(s)")
+            }
+        }.onFailure { err ->
+            if (err is NoSuchMethodException) {
+                Timber.d("Go engine AAR does not yet expose setIPBlocklistFromFiles; skipping .ips load")
+            } else {
+                Timber.w(err, "Failed to load IP blocklist files into engine")
+            }
         }
     }
 }

@@ -11,32 +11,42 @@ import (
 
 // DomainModuleRules stores domain-indexed rules extracted from external filter lists.
 type DomainModuleRules struct {
-	CSS        []string `json:"css,omitempty"`
-	BlockPaths []string `json:"block_paths,omitempty"`
+	CSS           []string `json:"css,omitempty"`
+	CSSExceptions []string `json:"css_exceptions,omitempty"`
+	InjectCSS     []string `json:"inject_css,omitempty"`
+	BlockPaths    []string `json:"block_paths,omitempty"`
+	RemoveParams  []string `json:"remove_params,omitempty"`
 }
 
 // ModulesConfig represents the top-level schema of modules.json (and merged filter module rules).
 type ModulesConfig struct {
-	Version          int64                         `json:"version"`
-	UpdatedAt        int64                         `json:"updatedAt"`
-	Modules          []WebModule                   `json:"modules"`
-	DomainIndex      map[string]string             `json:"domainIndex"`
-	GlobalBlockPaths []string                      `json:"globalBlockPaths"`
-	Domains          map[string]*DomainModuleRules `json:"domains,omitempty"`
-	GlobalPathsSnake []string                      `json:"global_block_paths,omitempty"`
+	Version             int64                         `json:"version"`
+	UpdatedAt           int64                         `json:"updatedAt"`
+	Modules             []WebModule                   `json:"modules"`
+	DomainIndex         map[string]string             `json:"domainIndex"`
+	GlobalBlockPaths    []string                      `json:"globalBlockPaths"`
+	Domains             map[string]*DomainModuleRules `json:"domains,omitempty"`
+	GlobalPathsSnake    []string                      `json:"global_block_paths,omitempty"`
+	GlobalCSSExceptions []string                      `json:"global_css_exceptions,omitempty"`
+	GlobalInjectCSS     []string                      `json:"global_inject_css,omitempty"`
+	GlobalRemoveParams  []string                      `json:"global_remove_params,omitempty"`
 }
 
 // WebModule represents a domain-specific ad blocking and feature rule set.
 type WebModule struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Enabled     bool           `json:"enabled"`
-	Domains     []string       `json:"domains"`
-	MockPaths   []MockPathRule `json:"mock_paths"`
-	BlockPaths  []string       `json:"block_paths"`
-	CosmeticCSS []string       `json:"cosmetic_css"`
-	Scriptlets  []string       `json:"scriptlets"`
-	Scripts     []string       `json:"scripts"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Enabled       bool           `json:"enabled"`
+	Domains       []string       `json:"domains"`
+	MockPaths     []MockPathRule `json:"mock_paths"`
+	BlockPaths    []string       `json:"block_paths"`
+	CosmeticCSS   []string       `json:"cosmetic_css"`
+	CSSExceptions []string       `json:"css_exceptions,omitempty"`
+	InjectCSS     []string       `json:"inject_css,omitempty"`
+	RemoveParams  []string       `json:"remove_params,omitempty"`
+	ProceduralCSS []string       `json:"procedural_css,omitempty"`
+	Scriptlets    []string       `json:"scriptlets"`
+	Scripts       []string       `json:"scripts"`
 }
 
 // MockPathRule specifies a path pattern and mock response details.
@@ -49,10 +59,13 @@ type MockPathRule struct {
 
 // ModuleStore holds thread-safe runtime lookup indexes for active modules.
 type ModuleStore struct {
-	mu          sync.RWMutex
-	modules     map[string]*WebModule
-	domainIndex map[string]*WebModule
-	globalPaths []string
+	mu                  sync.RWMutex
+	modules             map[string]*WebModule
+	domainIndex         map[string]*WebModule
+	globalPaths         []string
+	globalCSSExceptions []string
+	globalInjectCSS     []string
+	globalRemoveParams  []string
 }
 
 // ActiveModuleStore is the global singleton instance.
@@ -68,6 +81,9 @@ func (s *ModuleStore) UpdateFromJSON(raw string) error {
 		s.modules = make(map[string]*WebModule)
 		s.domainIndex = make(map[string]*WebModule)
 		s.globalPaths = nil
+		s.globalCSSExceptions = nil
+		s.globalInjectCSS = nil
+		s.globalRemoveParams = nil
 		s.mu.Unlock()
 		return nil
 	}
@@ -81,6 +97,18 @@ func (s *ModuleStore) UpdateFromJSON(raw string) error {
 	for i := range cfg.Modules {
 		m := cfg.Modules[i]
 		if m.Enabled {
+			if len(m.CosmeticCSS) > 0 {
+				var cleanCSS []string
+				for _, c := range m.CosmeticCSS {
+					cssRule, procRule := classifyCosmeticSelector(c)
+					if procRule != "" {
+						m.ProceduralCSS = append(m.ProceduralCSS, procRule)
+					} else if cssRule != "" {
+						cleanCSS = append(cleanCSS, cssRule)
+					}
+				}
+				m.CosmeticCSS = cleanCSS
+			}
 			modulesMap[m.ID] = &m
 		}
 	}
@@ -114,15 +142,24 @@ func (s *ModuleStore) UpdateFromJSON(raw string) error {
 			continue
 		}
 		var formattedCSS []string
+		var proceduralRules []string
 		for _, c := range extRules.CSS {
-			c = strings.TrimSpace(c)
-			if c == "" {
-				continue
+			cssRule, procRule := classifyCosmeticSelector(c)
+			if procRule != "" {
+				proceduralRules = append(proceduralRules, procRule)
+			} else if cssRule != "" {
+				formattedCSS = append(formattedCSS, cssRule)
 			}
-			if !strings.Contains(c, "{") {
-				c = c + " { display: none !important; }"
+		}
+
+		var injectCSS []string
+		for _, ic := range extRules.InjectCSS {
+			cssRule, procRule := classifyCosmeticSelector(ic)
+			if procRule != "" {
+				proceduralRules = append(proceduralRules, procRule)
+			} else if cssRule != "" {
+				injectCSS = append(injectCSS, cssRule)
 			}
-			formattedCSS = append(formattedCSS, c)
 		}
 
 		safeExtBlockPaths := sanitizeModulePaths(extRules.BlockPaths, 4)
@@ -130,14 +167,22 @@ func (s *ModuleStore) UpdateFromJSON(raw string) error {
 		if existing, exists := domainIdx[d]; exists {
 			existing.BlockPaths = append(existing.BlockPaths, safeExtBlockPaths...)
 			existing.CosmeticCSS = append(existing.CosmeticCSS, formattedCSS...)
+			existing.CSSExceptions = append(existing.CSSExceptions, extRules.CSSExceptions...)
+			existing.InjectCSS = append(existing.InjectCSS, injectCSS...)
+			existing.RemoveParams = append(existing.RemoveParams, extRules.RemoveParams...)
+			existing.ProceduralCSS = append(existing.ProceduralCSS, proceduralRules...)
 		} else {
 			mod := &WebModule{
-				ID:          "ext_" + d,
-				Name:        d,
-				Enabled:     true,
-				Domains:     []string{d},
-				BlockPaths:  safeExtBlockPaths,
-				CosmeticCSS: formattedCSS,
+				ID:            "ext_" + d,
+				Name:          d,
+				Enabled:       true,
+				Domains:       []string{d},
+				BlockPaths:    safeExtBlockPaths,
+				CosmeticCSS:   formattedCSS,
+				CSSExceptions: append([]string(nil), extRules.CSSExceptions...),
+				InjectCSS:     injectCSS,
+				RemoveParams:  append([]string(nil), extRules.RemoveParams...),
+				ProceduralCSS: proceduralRules,
 			}
 			modulesMap[mod.ID] = mod
 			domainIdx[d] = mod
@@ -168,14 +213,25 @@ func (s *ModuleStore) UpdateFromJSON(raw string) error {
 		}
 	}
 
+	var globalInjectCSS []string
+	for _, ic := range cfg.GlobalInjectCSS {
+		cssRule, _ := classifyCosmeticSelector(ic)
+		if cssRule != "" {
+			globalInjectCSS = append(globalInjectCSS, cssRule)
+		}
+	}
+
 	s.mu.Lock()
 	s.modules = modulesMap
 	s.domainIndex = domainIdx
 	s.globalPaths = globalPaths
+	s.globalCSSExceptions = append([]string(nil), cfg.GlobalCSSExceptions...)
+	s.globalInjectCSS = globalInjectCSS
+	s.globalRemoveParams = append([]string(nil), cfg.GlobalRemoveParams...)
 	s.mu.Unlock()
 
-	logf("Modules updated: %d active modules, %d domain mappings, %d global block paths",
-		len(modulesMap), len(domainIdx), len(globalPaths))
+	logf("Modules updated: %d active modules, %d domain mappings, %d global block paths, %d global remove_params",
+		len(modulesMap), len(domainIdx), len(globalPaths), len(cfg.GlobalRemoveParams))
 	return nil
 }
 
@@ -300,17 +356,80 @@ func (s *ModuleStore) MatchAndHandleWithReason(req *http.Request, host string) (
 	return nil, "", false
 }
 
-// GetCosmeticCSS returns all cosmetic CSS rules for a given host.
+// GetCosmeticCSS returns all cosmetic CSS rules (including inject_css and css_exceptions
+// revert overrides) applicable to a given host.
 func (s *ModuleStore) GetCosmeticCSS(host string) []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	exceptions := make(map[string]struct{}, len(s.globalCSSExceptions))
+	for _, sel := range s.globalCSSExceptions {
+		if sel = strings.TrimSpace(sel); sel != "" {
+			exceptions[sel] = struct{}{}
+		}
+	}
+
 	mod := s.findModuleForHost(host)
-	if mod == nil || len(mod.CosmeticCSS) == 0 {
+	if mod != nil {
+		for _, sel := range mod.CSSExceptions {
+			if sel = strings.TrimSpace(sel); sel != "" {
+				exceptions[sel] = struct{}{}
+			}
+		}
+	}
+
+	var out []string
+	if mod != nil {
+		for _, rule := range mod.CosmeticCSS {
+			if !isCSSRuleExcepted(rule, exceptions) {
+				out = append(out, rule)
+			}
+		}
+		out = append(out, mod.InjectCSS...)
+	}
+	out = append(out, s.globalInjectCSS...)
+
+	for sel := range exceptions {
+		if !strings.Contains(sel, "{") {
+			out = append(out, sel+" { display: revert !important; }")
+		}
+	}
+	return out
+}
+
+// GetRemoveParams returns all URL query parameter names to strip for the given host
+// (combining global_remove_params and domain-specific remove_params).
+func (s *ModuleStore) GetRemoveParams(host string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	mod := s.findModuleForHost(host)
+	n := len(s.globalRemoveParams)
+	if mod != nil {
+		n += len(mod.RemoveParams)
+	}
+	if n == 0 {
 		return nil
 	}
-	out := make([]string, len(mod.CosmeticCSS))
-	copy(out, mod.CosmeticCSS)
+	out := make([]string, 0, n)
+	out = append(out, s.globalRemoveParams...)
+	if mod != nil {
+		out = append(out, mod.RemoveParams...)
+	}
+	return out
+}
+
+// GetProceduralCSS returns procedural cosmetic rules for a given host.
+func (s *ModuleStore) GetProceduralCSS(host string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	mod := s.findModuleForHost(host)
+	if mod == nil || len(mod.ProceduralCSS) == 0 {
+		return nil
+	}
+	out := make([]string, len(mod.ProceduralCSS))
+	copy(out, mod.ProceduralCSS)
 	return out
 }
 

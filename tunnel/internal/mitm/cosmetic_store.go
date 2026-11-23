@@ -5,11 +5,16 @@ import (
 	"sync"
 )
 
-// CosmeticStore organizes cosmetic CSS rules into generic rules and per-host rules.
+// CosmeticStore organizes cosmetic CSS rules into generic rules, per-host rules,
+// CSS exceptions (#@#), and procedural cosmetic rules (:has-text, :upward, :remove) executed via JS.
 type CosmeticStore struct {
-	mu         sync.RWMutex
-	genericCSS string
-	byHost     map[string][]string
+	mu                sync.RWMutex
+	genericCSS        string
+	byHost            map[string][]string
+	exceptionsByHost  map[string]map[string]struct{}
+	genericExceptions map[string]struct{}
+	genericProcedural []string
+	proceduralByHost  map[string][]string
 }
 
 // Global cosmetic store singleton
@@ -18,18 +23,28 @@ var defaultCosmeticStore = NewCosmeticStore()
 // NewCosmeticStore creates an empty cosmetic store.
 func NewCosmeticStore() *CosmeticStore {
 	return &CosmeticStore{
-		byHost: make(map[string][]string),
+		byHost:            make(map[string][]string),
+		exceptionsByHost:  make(map[string]map[string]struct{}),
+		genericExceptions: make(map[string]struct{}),
+		proceduralByHost:  make(map[string][]string),
 	}
 }
 
 // ParseAndLoad parses cosmetic CSS rules from raw filter list text.
-// Supports both standard AdBlock cosmetic rules (domain##selector, ##genericSelector)
+// Supports standard AdBlock cosmetic rules (domain##selector, ##genericSelector),
+// cosmetic exceptions (domain#@#selector, #@#selector),
+// uBlock extended CSS (:style(...)) / AdGuard CSS injection (#$#),
+// procedural cosmetic rules (:has-text, :upward, :remove),
 // and raw CSS blocks (e.g. from adblock_cosmetic.css), even when combined in one input.
 func (s *CosmeticStore) ParseAndLoad(content string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.byHost = make(map[string][]string)
+	s.exceptionsByHost = make(map[string]map[string]struct{})
+	s.genericExceptions = make(map[string]struct{})
+	s.genericProcedural = nil
+	s.proceduralByHost = make(map[string][]string)
 	var genericBuilder strings.Builder
 
 	lines := strings.Split(content, "\n")
@@ -40,31 +55,85 @@ func (s *CosmeticStore) ParseAndLoad(content string) {
 		if trimmed == "" || strings.HasPrefix(trimmed, "!") || strings.HasPrefix(trimmed, "[") {
 			continue
 		}
-		if strings.Contains(trimmed, "#@#") || strings.Contains(trimmed, "##+js") ||
+		if strings.Contains(trimmed, "##+js") || strings.Contains(trimmed, "#@#+js") ||
 			strings.Contains(trimmed, "##^") || strings.Contains(trimmed, "#%#") ||
-			strings.Contains(trimmed, "#?#") || strings.Contains(trimmed, "#$#") {
+			strings.Contains(trimmed, "#@%#") {
 			continue
 		}
 
-		// AdBlock cosmetic rule: [domains]##selector
-		if idx := strings.Index(trimmed, "##"); idx >= 0 {
+		// Handle cosmetic exceptions: [domains]#@#selector
+		if exIdx := strings.Index(trimmed, "#@#"); exIdx >= 0 {
 			hasAdblockRules = true
-			domainPart := strings.TrimSpace(trimmed[:idx])
-			selector := strings.TrimSpace(trimmed[idx+2:])
+			domainPart := strings.TrimSpace(trimmed[:exIdx])
+			selector := strings.TrimSpace(trimmed[exIdx+3:])
+			if selector == "" {
+				continue
+			}
+			if domainPart == "" {
+				s.genericExceptions[selector] = struct{}{}
+			} else {
+				for _, d := range strings.Split(domainPart, ",") {
+					d = strings.ToLower(strings.TrimSpace(d))
+					if d != "" && !strings.HasPrefix(d, "~") {
+						if s.exceptionsByHost[d] == nil {
+							s.exceptionsByHost[d] = make(map[string]struct{})
+						}
+						s.exceptionsByHost[d][selector] = struct{}{}
+					}
+				}
+			}
+			continue
+		}
+
+		// Support both standard `##` and extended `#?#` / `#$#` cosmetic rules
+		sep := ""
+		sepIdx := -1
+		if idx := strings.Index(trimmed, "##"); idx >= 0 {
+			sep = "##"
+			sepIdx = idx
+		} else if idx := strings.Index(trimmed, "#?#"); idx >= 0 {
+			sep = "#?#"
+			sepIdx = idx
+		} else if idx := strings.Index(trimmed, "#$#"); idx >= 0 {
+			sep = "#$#"
+			sepIdx = idx
+		}
+
+		if sepIdx >= 0 {
+			hasAdblockRules = true
+			domainPart := strings.TrimSpace(trimmed[:sepIdx])
+			selector := strings.TrimSpace(trimmed[sepIdx+len(sep):])
 			if selector == "" {
 				continue
 			}
 
-			ruleCSS := selector + " { display: none !important; }"
+			cssRule, procRule := classifyCosmeticSelector(selector)
+			if procRule != "" {
+				if domainPart == "" {
+					s.genericProcedural = append(s.genericProcedural, procRule)
+				} else {
+					for _, d := range strings.Split(domainPart, ",") {
+						d = strings.ToLower(strings.TrimSpace(d))
+						if d != "" && !strings.HasPrefix(d, "~") {
+							s.proceduralByHost[d] = append(s.proceduralByHost[d], procRule)
+						}
+					}
+				}
+				continue
+			}
+
+			if cssRule == "" {
+				continue
+			}
 
 			if domainPart == "" {
-				genericBuilder.WriteString(ruleCSS)
+				genericBuilder.WriteString(cssRule)
 				genericBuilder.WriteString("\n")
 			} else {
 				for _, d := range strings.Split(domainPart, ",") {
 					d = strings.ToLower(strings.TrimSpace(d))
 					if d != "" && !strings.HasPrefix(d, "~") {
-						s.byHost[d] = append(s.byHost[d], ruleCSS)
+						s.byHost[d] = append(s.byHost[d], cssRule)
 					}
 				}
 			}
@@ -72,6 +141,19 @@ func (s *CosmeticStore) ParseAndLoad(content string) {
 		}
 
 		// Raw CSS line or comment (e.g. from adblock_cosmetic.css)
+		// If a pre-compiled .css file contains `:style(...)` or procedural selectors without `{`, handle them too.
+		if !strings.Contains(trimmed, "{") && (isProceduralSelector(trimmed) || strings.Contains(strings.ToLower(trimmed), ":style(")) {
+			hasAdblockRules = true
+			cssRule, procRule := classifyCosmeticSelector(trimmed)
+			if procRule != "" {
+				s.genericProcedural = append(s.genericProcedural, procRule)
+			} else if cssRule != "" {
+				genericBuilder.WriteString(cssRule)
+				genericBuilder.WriteString("\n")
+			}
+			continue
+		}
+
 		genericBuilder.WriteString(line)
 		genericBuilder.WriteString("\n")
 	}
@@ -81,7 +163,8 @@ func (s *CosmeticStore) ParseAndLoad(content string) {
 	} else {
 		s.genericCSS = genericBuilder.String()
 	}
-	logf("CosmeticStore updated: generic rules=%d bytes, hosts=%d", len(s.genericCSS), len(s.byHost))
+	logf("CosmeticStore updated: generic rules=%d bytes, hosts=%d, procedural=%d global / %d hosts",
+		len(s.genericCSS), len(s.byHost), len(s.genericProcedural), len(s.proceduralByHost))
 }
 
 // AddHostCSS adds custom CSS specifically for a domain (e.g. from RuleManifest).
@@ -95,17 +178,43 @@ func (s *CosmeticStore) AddHostCSS(domain string, css string) {
 	}
 }
 
-// GetCSSForHost returns all cosmetic CSS applicable to the specific hostname.
+// GetCSSForHost returns all cosmetic CSS applicable to the specific hostname,
+// filtering out rules matching host/global CSS exceptions and emitting unhide overrides
+// so generic /cosmetic.css rules cannot hide excepted elements on this host.
 func (s *CosmeticStore) GetCSSForHost(host string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	host = normalizeHost(host)
-	var rules []string
+	exceptions := make(map[string]struct{}, len(s.genericExceptions))
+	for sel := range s.genericExceptions {
+		exceptions[sel] = struct{}{}
+	}
+	for d, exSet := range s.exceptionsByHost {
+		if host == d || strings.HasSuffix(host, "."+d) {
+			for sel := range exSet {
+				exceptions[sel] = struct{}{}
+			}
+		}
+	}
 
+	var rules []string
 	for d, cssList := range s.byHost {
 		if host == d || strings.HasSuffix(host, "."+d) {
-			rules = append(rules, cssList...)
+			for _, rule := range cssList {
+				if isCSSRuleExcepted(rule, exceptions) {
+					continue
+				}
+				rules = append(rules, rule)
+			}
+		}
+	}
+
+	// Emit revert overrides for host exceptions so generic rules in /cosmetic.css
+	// (which is shared across all hosts) do not hide excepted elements on this host.
+	for sel := range exceptions {
+		if sel != "" && !strings.Contains(sel, "{") {
+			rules = append(rules, sel+" { display: revert !important; }")
 		}
 	}
 
@@ -113,6 +222,36 @@ func (s *CosmeticStore) GetCSSForHost(host string) string {
 		return ""
 	}
 	return strings.Join(rules, "\n")
+}
+
+func isCSSRuleExcepted(rule string, exceptions map[string]struct{}) bool {
+	if len(exceptions) == 0 {
+		return false
+	}
+	sel := strings.TrimSpace(rule)
+	if braceIdx := strings.IndexByte(sel, '{'); braceIdx >= 0 {
+		sel = strings.TrimSpace(sel[:braceIdx])
+	}
+	_, ok := exceptions[sel]
+	return ok
+}
+
+// GetProceduralForHost returns generic + host-specific procedural cosmetic rules.
+func (s *CosmeticStore) GetProceduralForHost(host string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	host = normalizeHost(host)
+	var out []string
+	if len(s.genericProcedural) > 0 {
+		out = append(out, s.genericProcedural...)
+	}
+	for d, procList := range s.proceduralByHost {
+		if host == d || strings.HasSuffix(host, "."+d) {
+			out = append(out, procList...)
+		}
+	}
+	return out
 }
 
 // GetGenericCSS returns the generic CSS rules applied globally.

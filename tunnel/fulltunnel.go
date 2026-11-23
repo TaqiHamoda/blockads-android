@@ -179,6 +179,20 @@ func (e *Engine) StartFull(fd int, protector SocketProtector) {
 			_ = conn.Close()
 			return
 		}
+		if e.isIPBlocked(flow.serverIP) {
+			e.reportBlockedFlow(flow, ProtocolTCP, "ip_blocklist")
+			_ = conn.Close()
+			return
+		}
+		if flow.serverPort == 443 {
+			if handled, nextConn := trySniProxyRedirectTCP(conn, flow, e, uidr, protectFn); handled {
+				_ = conn.Close()
+				return
+			} else if nextConn != nil {
+				tcpHandler(nextConn)
+				return
+			}
+		}
 		tcpHandler(conn)
 	})
 	stack.SetUdpHandler(newFullTunnelUdpHandler(e, filter, uidr, protectFn))
@@ -246,6 +260,11 @@ func newFullTunnelUdpHandler(engine *Engine, filter *MitmFilter, uidr UIDResolve
 		}
 		if blocked, reason := engine.checkDomainBlockedWithReason(flow.serverIP.String()); blocked {
 			engine.reportBlockedFlow(flow, ProtocolUDP, reason)
+			_ = conn.Close()
+			return
+		}
+		if engine.isIPBlocked(flow.serverIP) {
+			engine.reportBlockedFlow(flow, ProtocolUDP, "ip_blocklist")
 			_ = conn.Close()
 			return
 		}
@@ -341,14 +360,6 @@ func newFullPassthroughTcpHandler(engine *Engine, uidr UIDResolver, protectFn fu
 			return
 		}
 		engine.logConnection(flow, ProtocolTCP)
-		if !forceDirect && flow.serverPort == 443 {
-			if handled, nextConn := trySniProxyRedirect(conn, flow, engine, uidr, protectFn); handled {
-				return
-			} else if nextConn != nil {
-				relayDirectFromFlow(nextConn, flow, engine, protectFn, false)
-				return
-			}
-		}
 		relayDirectFromFlow(conn, flow, engine, protectFn, forceDirect)
 	}
 }

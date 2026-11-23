@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nqmgaming/blockads-tunnel/internal/mitm"
+	"github.com/xjasonlyu/tun2socks/v2/core/adapter"
 )
 
 type sniProxyRuleInput struct {
@@ -25,10 +26,20 @@ type compiledSniProxyRule struct {
 	domains    []string
 }
 
+type activeSniFlow struct {
+	conn       net.Conn
+	remote     net.Conn
+	uid        int
+	sni        string
+	targetAddr string
+}
+
 // SetSniProxyRules configures per-app / per-SNI TCP 443 redirection rules from a JSON array.
 func (e *Engine) SetSniProxyRules(rulesJSON string) {
 	if strings.TrimSpace(rulesJSON) == "" {
 		e.sniProxyRules.Store(nil)
+		closed := e.closeStaleSniFlows(nil)
+		logf("[SniProxy] Cleared SNI proxy rules (closed %d active flows)", closed)
 		return
 	}
 	var inputs []sniProxyRuleInput
@@ -75,7 +86,57 @@ func (e *Engine) SetSniProxyRules(rulesJSON string) {
 	} else {
 		e.sniProxyRules.Store(&compiled)
 	}
-	logf("[SniProxy] Loaded %d active SNI proxy rules", len(compiled))
+	closed := e.closeStaleSniFlows(compiled)
+	logf("[SniProxy] Loaded %d active SNI proxy rules (closed %d stale flows)", len(compiled), closed)
+}
+
+func (e *Engine) registerSniFlow(f *activeSniFlow) {
+	e.sniProxyFlowsMu.Lock()
+	if e.sniProxyFlows == nil {
+		e.sniProxyFlows = make(map[*activeSniFlow]struct{})
+	}
+	e.sniProxyFlows[f] = struct{}{}
+	e.sniProxyFlowsMu.Unlock()
+}
+
+func (e *Engine) unregisterSniFlow(f *activeSniFlow) {
+	e.sniProxyFlowsMu.Lock()
+	delete(e.sniProxyFlows, f)
+	e.sniProxyFlowsMu.Unlock()
+}
+
+func matchesActiveSniRule(rules []compiledSniProxyRule, uid int, sni string, targetAddr string) bool {
+	for _, r := range rules {
+		if r.targetAddr != targetAddr {
+			continue
+		}
+		if len(r.uids) > 0 && (uid == UIDUnknown || !r.uids[uid]) {
+			continue
+		}
+		if matchSniDomain(sni, r.domains) {
+			return true
+		}
+	}
+	return false
+}
+
+// closeStaleSniFlows tears down existing redirected TCP connections that no
+// longer match the updated SNI proxy rules so apps reconnect immediately.
+func (e *Engine) closeStaleSniFlows(newRules []compiledSniProxyRule) int {
+	e.sniProxyFlowsMu.Lock()
+	var stale []*activeSniFlow
+	for f := range e.sniProxyFlows {
+		if !matchesActiveSniRule(newRules, f.uid, f.sni, f.targetAddr) {
+			stale = append(stale, f)
+		}
+	}
+	e.sniProxyFlowsMu.Unlock()
+
+	for _, f := range stale {
+		_ = f.conn.Close()
+		_ = f.remote.Close()
+	}
+	return len(stale)
 }
 
 func normalizeSniProxyTarget(raw string) string {
@@ -115,10 +176,10 @@ func (e *Engine) shouldDropQuicForSniProxy(uidr UIDResolver, flow flowID) bool {
 	return false
 }
 
-func (e *Engine) sniProxyCandidatesForFlow(uidr UIDResolver, flow flowID) []compiledSniProxyRule {
+func (e *Engine) sniProxyCandidatesForFlow(uidr UIDResolver, flow flowID) (int, []compiledSniProxyRule) {
 	ptr := e.sniProxyRules.Load()
 	if ptr == nil || len(*ptr) == 0 {
-		return nil
+		return UIDUnknown, nil
 	}
 	rules := *ptr
 	hasAppScoped := false
@@ -138,7 +199,7 @@ func (e *Engine) sniProxyCandidatesForFlow(uidr UIDResolver, flow flowID) []comp
 			matched = append(matched, r)
 		}
 	}
-	return matched
+	return uid, matched
 }
 
 func matchSniDomain(sni string, domains []string) bool {
@@ -165,6 +226,88 @@ type prefixConn struct {
 
 func (c *prefixConn) Read(p []byte) (int, error) {
 	return c.reader.Read(p)
+}
+
+// prefixTCPConn wraps an adapter.TCPConn to replay already-peeked TLS ClientHello
+// bytes when handing a non-matching connection down to the MITM/passthrough handler.
+type prefixTCPConn struct {
+	adapter.TCPConn
+	reader io.Reader
+}
+
+func (c *prefixTCPConn) Read(p []byte) (int, error) {
+	return c.reader.Read(p)
+}
+
+// trySniProxyRedirectTCP checks SNI proxy rules for an adapter.TCPConn so it works
+// identically in both HTTPS MITM mode and passthrough mode.
+func trySniProxyRedirectTCP(
+	conn adapter.TCPConn,
+	flow flowID,
+	engine *Engine,
+	uidr UIDResolver,
+	protectFn func(fd int) bool,
+) (bool, adapter.TCPConn) {
+	uid, candidates := engine.sniProxyCandidatesForFlow(uidr, flow)
+	if len(candidates) == 0 {
+		return false, nil
+	}
+	peeked, err := peekTLSClientHello(conn)
+	if len(peeked) == 0 {
+		return true, nil
+	}
+	if err == nil || len(peeked) >= 5 {
+		sni := mitm.ParseClientHelloSNI(peeked)
+		for _, rule := range candidates {
+			if matchSniDomain(sni, rule.domains) {
+				if uid == UIDUnknown && uidr != nil {
+					uid = resolveFlowUID(uidr, ProtocolTCP, flow)
+				}
+				redirectSniFlow(engine, conn, peeked, uid, sni, rule, protectFn)
+				return true, nil
+			}
+		}
+	}
+	return false, &prefixTCPConn{
+		TCPConn: conn,
+		reader:  io.MultiReader(bytes.NewReader(peeked), conn),
+	}
+}
+
+func redirectSniFlow(
+	engine *Engine,
+	conn net.Conn,
+	peeked []byte,
+	uid int,
+	sni string,
+	rule compiledSniProxyRule,
+	protectFn func(fd int) bool,
+) bool {
+	dialer := &net.Dialer{
+		Timeout: flowDialTimeout,
+		Control: protectedControl(protectFn),
+	}
+	remote, derr := dialer.Dial("tcp", rule.targetAddr)
+	if derr != nil {
+		logf("[SniProxy] dial %s for %s failed: %v", rule.targetAddr, sni, derr)
+		return false
+	}
+	defer remote.Close()
+	active := &activeSniFlow{
+		conn:       conn,
+		remote:     remote,
+		uid:        uid,
+		sni:        sni,
+		targetAddr: rule.targetAddr,
+	}
+	engine.registerSniFlow(active)
+	defer engine.unregisterSniFlow(active)
+	if _, werr := remote.Write(peeked); werr != nil {
+		logf("[SniProxy] write ClientHello to %s failed: %v", rule.targetAddr, werr)
+		return false
+	}
+	bidiCopyFlow(conn, remote)
+	return true
 }
 
 func peekTLSClientHello(conn net.Conn) ([]byte, error) {
@@ -203,7 +346,7 @@ func trySniProxyRedirect(
 	uidr UIDResolver,
 	protectFn func(fd int) bool,
 ) (bool, net.Conn) {
-	candidates := engine.sniProxyCandidatesForFlow(uidr, flow)
+	uid, candidates := engine.sniProxyCandidatesForFlow(uidr, flow)
 	if len(candidates) == 0 {
 		return false, nil
 	}
@@ -215,21 +358,10 @@ func trySniProxyRedirect(
 		sni := mitm.ParseClientHelloSNI(peeked)
 		for _, rule := range candidates {
 			if matchSniDomain(sni, rule.domains) {
-				dialer := &net.Dialer{
-					Timeout: flowDialTimeout,
-					Control: protectedControl(protectFn),
+				if uid == UIDUnknown && uidr != nil {
+					uid = resolveFlowUID(uidr, ProtocolTCP, flow)
 				}
-				remote, derr := dialer.Dial("tcp", rule.targetAddr)
-				if derr != nil {
-					logf("[SniProxy] dial %s for %s failed: %v", rule.targetAddr, sni, derr)
-					return true, nil
-				}
-				defer remote.Close()
-				if _, werr := remote.Write(peeked); werr != nil {
-					logf("[SniProxy] write ClientHello to %s failed: %v", rule.targetAddr, werr)
-					return true, nil
-				}
-				bidiCopyFlow(conn, remote)
+				redirectSniFlow(engine, conn, peeked, uid, sni, rule, protectFn)
 				return true, nil
 			}
 		}
