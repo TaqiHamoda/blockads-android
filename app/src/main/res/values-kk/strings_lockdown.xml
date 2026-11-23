@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_device_owner_confirm_message">Құрылғы иесінің құқықтарын алып тастағыңыз келетініне сенімдісіз бе? Бұл барлық әкімшілік саясаттарды өшіреді және қолданбаны жоюға мүмкіндік береді.</string>
+    <string name="clear_device_owner_confirm_title">Құрылғы иесінің құқықтарын алып тастау керек пе?</string>
+    <string name="delete">Жою</string>
+    <string name="device_admin_description">BlockAds үшін тұрақтылық пен саясат шектеулерін қамтамасыз ететін құрылғы әкімшісі.</string>
+    <string name="device_owner_cleared_success">Құрылғы иесінің құқықтары алып тасталды</string>
+    <string name="device_owner_clear_failed">Құрылғы иесінің құқықтарын алып тастау сәтсіз аяқталды</string>
+    <string name="lockdown_duration_10m">10 минут</string>
+    <string name="lockdown_duration_12h">12 сағат</string>
+    <string name="lockdown_duration_1h">1 сағат</string>
+    <string name="lockdown_duration_1m">1 минут</string>
+    <string name="lockdown_duration_24h">24 сағат</string>
+    <string name="lockdown_duration_30m">30 минут</string>
+    <string name="lockdown_duration_5m">5 минут</string>
+    <string name="lockdown_duration_6h">6 сағат</string>
+    <string name="lockdown_screen_add_blacklist">Вебсайтты қара тізімге қосу</string>
+    <string name="lockdown_screen_cancel">Күтуді болдырмау</string>
+    <string name="lockdown_screen_cancel_desc">Болдырмағанда таймер толық ұзақтыққа қайта орнатылады.</string>
+    <string name="lockdown_screen_desc">Параметрлерді өзгерту немесе жарнама блоктауын өшіру үшін күту таймерін іске қосу қажет.</string>
+    <string name="lockdown_screen_duration">Таймер ұзақтығы: %1$s</string>
+    <string name="lockdown_screen_start">Күту таймерін іске қосу</string>
+    <string name="lockdown_screen_title">BlockAds құлыптаулы</string>
+    <string name="settings_device_owner_clear_owner">Құрылғы иесін алып тастау</string>
+    <string name="settings_device_owner_clear_owner_desc">BlockAds-тан құрылғы иесінің әкімшілік құқықтарын алу.</string>
+    <string name="settings_device_owner_enforce_restrictions">Құрылғы шектеулері</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Қолданба деңгейіндегі шектеулерді қолдану үшін қосыңыз (әзірлеу құралдарын блоктау т.б.). Оларды өшіру үшін өшіріңіз.</string>
+    <string name="settings_device_owner_section_desc">Құрылғы иесінің шектеулерін басқару. BlockAds құрылғы иесі болғандықтан ғана көрінеді.</string>
+    <string name="settings_device_owner_section_title">Құрылғы иесін басқару</string>
+    <string name="settings_lockdown_duration_desc">Қолданбаны құлыптан шығару үшін күтетін уақыт</string>
+    <string name="settings_lockdown_duration_title">Күту ұзақтығы</string>
+    <string name="settings_lockdown_mode_desc">Қосылғанда таймер бітпейінше VPN-ді өшіру немесе параметрлерге кіру мүмкін емес.</string>
+    <string name="settings_lockdown_mode_title">VPN құлыптау режимі</string>
+    <string name="settings_lockdown_section_desc">Жарнама блоктауын өшіру үшін міндетті күту таймері. Сасқалаң қайта оралулардың алдын алуға көмектеседі.</string>
+    <string name="settings_lockdown_section_title">Импульс бақылауы және құлыптау</string>
+</resources>

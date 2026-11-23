@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clear_device_owner_confirm_message">Biztosan eltávolítja az eszköztulajdonosi jogosultságokat? Ez törli az összes felügyeleti szabályzatot, és lehetővé teszi az alkalmazás eltávolítását.</string>
+    <string name="clear_device_owner_confirm_title">Eltávolítja az eszköztulajdonosi jogosultságokat?</string>
+    <string name="delete">Törlés</string>
+    <string name="device_admin_description">Eszközadminisztrátor a BlockAds megőrzésének és szabályzati korlátozásainak betartatásához.</string>
+    <string name="device_owner_cleared_success">Az eszköztulajdonosi jogosultságok eltávolítva</string>
+    <string name="device_owner_clear_failed">Nem sikerült eltávolítani az eszköztulajdonosi jogosultságokat</string>
+    <string name="lockdown_duration_10m">10 perc</string>
+    <string name="lockdown_duration_12h">12 óra</string>
+    <string name="lockdown_duration_1h">1 óra</string>
+    <string name="lockdown_duration_1m">1 perc</string>
+    <string name="lockdown_duration_24h">24 óra</string>
+    <string name="lockdown_duration_30m">30 perc</string>
+    <string name="lockdown_duration_5m">5 perc</string>
+    <string name="lockdown_duration_6h">6 óra</string>
+    <string name="lockdown_screen_add_blacklist">Weboldal hozzáadása a tiltólistához</string>
+    <string name="lockdown_screen_cancel">Várakozás megszakítása</string>
+    <string name="lockdown_screen_cancel_desc">A megszakítás visszaállítja az időzítőt a teljes időtartamra.</string>
+    <string name="lockdown_screen_desc">A beállítások módosításához vagy a hirdetésblokkolás kikapcsolásához el kell indítania a visszaszámlálót.</string>
+    <string name="lockdown_screen_duration">Időzítő időtartama: %1$s</string>
+    <string name="lockdown_screen_start">Visszaszámláló indítása</string>
+    <string name="lockdown_screen_title">A BlockAds zárolva van</string>
+    <string name="settings_device_owner_clear_owner">Eszköztulajdonos eltávolítása</string>
+    <string name="settings_device_owner_clear_owner_desc">A BlockAds eszköztulajdonosi felügyeleti jogosultságainak visszavonása.</string>
+    <string name="settings_device_owner_enforce_restrictions">Eszközkorlátozások</string>
+    <string name="settings_device_owner_enforce_restrictions_desc">Kapcsolja be az alkalmazásszintű korlátozásokhoz (fejlesztői eszközök tiltása stb.). Kapcsolja ki a törlésükhöz.</string>
+    <string name="settings_device_owner_section_desc">Az eszköztulajdonosi korlátozások kezelése. Csak azért látható, mert a BlockAds eszköztulajdonos.</string>
+    <string name="settings_device_owner_section_title">Eszköztulajdonos-vezérlés</string>
+    <string name="settings_lockdown_duration_desc">Az alkalmazás feloldásáig várakozandó idő</string>
+    <string name="settings_lockdown_duration_title">Visszaszámláló időtartama</string>
+    <string name="settings_lockdown_mode_desc">Ha engedélyezve van, a VPN nem kapcsolható ki, és a beállítások nem érhetők el a visszaszámláló lejárta előtt.</string>
+    <string name="settings_lockdown_mode_title">VPN zárolási mód</string>
+    <string name="settings_lockdown_section_desc">Kötelező visszaszámláló a hirdetésblokkolás kikapcsolásához. Segít megelőzni a hirtelen visszaeséseket.</string>
+    <string name="settings_lockdown_section_title">Impulzuskontroll és zárolás</string>
+</resources>
